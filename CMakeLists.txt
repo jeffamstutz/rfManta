@@ -72,7 +72,7 @@ INCLUDE (${CMAKE_CURRENT_SOURCE_DIR}/CMake/BuildType.cmake)
 # Check if the build supports SSE
 INCLUDE (${CMAKE_CURRENT_SOURCE_DIR}/CMake/CheckSSE.cmake)
 # Add a static library build info and license.
-INCLUDE (${CMAKE_CURRENT_SOURCE_DIR}/CMake/About.cmake)
+#INCLUDE (${CMAKE_CURRENT_SOURCE_DIR}/CMake/About.cmake)
 # Check for specific machine/compiler options.
 INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/CMake/ConfigCompilerFlags.cmake)
 
@@ -129,7 +129,7 @@ SET(MANTA_TARGET_LINK_LIBRARIES
   Manta_Image
   Manta_Interface
   Manta_Core
-  About
+  #About
   ${SYSTEM_MATH_LIB}
   )
 

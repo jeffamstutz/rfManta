@@ -107,11 +107,11 @@ static void usage(Factory* rtrt)
 
   cerr << "Manta Interactive Ray Tracer" << "\n\n";
 
-  cerr << getLicenseString() << "\n";
+  //cerr << getLicenseString() << "\n";
 
-  cerr << "Revision information:\n";
+  //cerr << "Revision information:\n";
 
-  cerr << getAboutString() << "\n\n";
+  //cerr << getAboutString() << "\n\n";
 
   cerr << "Usage: manta [options]\n";
   cerr << "Valid options are:\n";
