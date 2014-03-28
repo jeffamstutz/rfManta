@@ -1,0 +1,4 @@
+#!/bin/tcsh
+setenv PYTHONPATH ""
+${PY_SEARCH_PATH}
+${PY_COMMAND} ${PY_SOURCE_FILE} $*

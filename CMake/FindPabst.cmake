@@ -1,0 +1,23 @@
+
+SET(PABST_INSTALL_PATH "" CACHE PATH "Default search path for PABST install")
+
+IF(PABST_INSTALL_PATH)
+FIND_PATH(PABST_INCLUDE_DIR pabst.h
+			    ${PABST_INSTALL_PATH}/include
+			    /usr/include
+			    /usr/local/include
+			    )
+
+FIND_LIBRARY(PABST_LIBRARIES NAMES pabst
+			     PATHS ${PABST_INSTALL_PATH}/lib
+			           ${THIRD_PARTY_INSTALL_PATH}/lib
+			    	   /usr/lib
+				   /usr/local/lib
+			     )
+
+IF(PABST_INCLUDE_DIR AND PABST_LIBRARIES)
+   SET(PABST_FOUND TRUE)
+ELSE(PABST_INCLUDE_DIR AND PABST_LIBRARIES)
+   MESSAGE("Could not find PABST")
+ENDIF(PABST_INCLUDE_DIR AND PABST_LIBRARIES)
+ENDIF(PABST_INSTALL_PATH)

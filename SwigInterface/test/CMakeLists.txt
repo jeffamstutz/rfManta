@@ -1,0 +1,36 @@
+SET(CMAKE_VERBOSE_MAKEFILE ON)
+
+SET(BUILD_SWIG_INTERFACE TRUE CACHE BOOL "Check for swig/python")
+IF(BUILD_SWIG_INTERFACE)
+IF("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" GREATER 2.1)
+  # This will dump all the interface files in the library path.  Note
+  # that this needs to be set before you try to find swig.
+  SET(CMAKE_SWIG_OUTDIR ${LIBRARY_OUTPUT_PATH})
+  # Only process the swig directory if we have swig stuff
+  FIND_PACKAGE(SWIG)
+  IF (SWIG_FOUND)
+   SET(MAIN_SUBDIRS ${MAIN_SUBDIRS} SwigInterface)
+  ENDIF (SWIG_FOUND)
+ENDIF("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" GREATER 2.1)
+ENDIF(BUILD_SWIG_INTERFACE)
+
+FIND_PACKAGE(PythonLibs)
+INCLUDE_DIRECTORIES(${PYTHON_INCLUDE_PATH})
+
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR})
+
+INCLUDE(${CMAKE_CURRENT_SOURCE_DIR}/../../CMake/MantaUseSWIG.cmake)
+
+MACRO(MANTA_BUILD_SWIG_MODULE module_name interface_file)
+  SET_SOURCE_FILES_PROPERTIES(${interface_file} PROPERTIES CPLUSPLUS ON)
+  SET_SOURCE_FILES_PROPERTIES(${interface_file} PROPERTIES SWIG_FLAGS "-Wall")
+
+  SWIG_ADD_MODULE(${module_name} python ${interface_file} ${ARGN})
+  SWIG_LINK_LIBRARIES(${module_name} ${PYTHON_LIBRARIES})
+ENDMACRO(MANTA_BUILD_SWIG_MODULE)
+
+MANTA_BUILD_SWIG_MODULE(test test.i)
+MANTA_BUILD_SWIG_MODULE(child child.i child.cc child.h)
+MANTA_BUILD_SWIG_MODULE(parent parent.i parent.h)
+
+

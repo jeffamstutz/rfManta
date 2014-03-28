@@ -1,0 +1,9 @@
+SET(Manta_Intersections_SRCS
+    Intersections/AxisAlignedBox.h
+    Intersections/IsosurfaceImplicit.cc
+    Intersections/IsosurfaceImplicit.h
+    Intersections/TriangleBBoxOverlap.h
+    Intersections/TriangleBBoxOverlap.cc
+    Intersections/TriangleEdge.h
+    Intersections/Plane.h
+)

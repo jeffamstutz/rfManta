@@ -1,0 +1,28 @@
+
+Most of the rendering components in manta undergo a similar sequence
+of calls for setting up the rendering.  This sequence is initiates
+during any "structural" change, including changing the number of
+processors, changing resolution of any of the image displays, changing
+from stereo to non-stereo, and changing and of the rendering
+components.
+
+First, the method setupBegin is called with a SetupContext object and a
+number of display channels.  Then for each display channel, the method
+setupDisplayChannel is called with a different SetupContext object and
+a channel index.  The component is responsible for passing the
+setupBegin and setupDisplayChannel calls to any components that it
+uses.  These setup functions are called by all threads.  The members
+"proc" and "numProcs" of SetupContext are used to identify the rank
+and size (respectively) of the calling thread.
+
+During setupDisplayChannel, any of the components in the system can
+change the resolution of the image or the image pipeline depth.  Any
+such changes will cause the setupDisplayChannel method to be called
+again with the new information.  This sequence is repeated until the
+process converges (i.e. no longer changes the resolution or pipeline
+depth). 
+
+At the beginning of the frame, the method setupFrame is called by all
+threads.  Again, the components are responsible for calling setupFrame
+on any components that it uses.
+

@@ -1,0 +1,61 @@
+/*
+  For more information, please see: http://software.sci.utah.edu
+
+  The MIT License
+
+  Copyright (c) 2005-2006
+  Scientific Computing and Imaging Institute, University of Utah
+
+  License for the specific language governing rights and limitations under
+  Permission is hereby granted, free of charge, to any person obtaining a
+  copy of this software and associated documentation files (the "Software"),
+  to deal in the Software without restriction, including without limitation
+  the rights to use, copy, modify, merge, publish, distribute, sublicense,
+  and/or sell copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included
+  in all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+  OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+  THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+  DEALINGS IN THE SOFTWARE.
+*/
+
+#ifndef RegisterConfigurableComponents_H
+#define RegisterConfigurableComponents_H
+
+#include <Engine/Factory/Factory.h>
+
+// Add new includes in their own block that can be defined in and out
+// of existence.  Make sure in the CMakeLists.txt file that you create
+// a variable that will be either 1 or 0 based on the configuration.
+#if ${PABST_FOUND_DEF}
+#include <Engine/Renderers/Raydumper.h>
+#endif
+
+#if ${USE_MPI_DEF}
+# include <Engine/LoadBalancers/MPI_LoadBalancer.h>
+# include <Engine/ImageTraversers/MPI_ImageTraverser.h>
+#endif
+
+namespace Manta {
+  static void RegisterConfigurableComponents(Factory* engine)
+  {
+    // Now optionally add code
+#if ${PABST_FOUND_DEF}
+    engine->registerComponent("raydumper", &Raydumper::create);
+#endif
+
+#if ${USE_MPI_DEF}
+    engine->registerComponent("MPI_ImageTraverser", &MPI_ImageTraverser::create);
+    engine->registerComponent("MPI_LoadBalancer", &MPI_LoadBalancer::create);
+#endif
+  }
+} // end namespace Manta
+
+#endif // RegisterConfigurableComponents_H

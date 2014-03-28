@@ -1,0 +1,62 @@
+SET(CMAKE_VERBOSE_MAKEFILE ON)
+
+SET(BUILD_SWIG_INTERFACE TRUE CACHE BOOL "Check for swig/python")
+IF(BUILD_SWIG_INTERFACE)
+IF("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" GREATER 1.9)
+  # This will dump all the interface files in the library path.  Note
+  # that this needs to be set before you try to find swig.
+  SET(CMAKE_SWIG_OUTDIR ${LIBRARY_OUTPUT_PATH})
+  # Only process the swig directory if we have swig stuff
+  FIND_PACKAGE(SWIG)
+  IF (SWIG_FOUND)
+   SET(MAIN_SUBDIRS ${MAIN_SUBDIRS} SwigInterface)
+  ENDIF (SWIG_FOUND)
+ENDIF("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" GREATER 1.9)
+ENDIF(BUILD_SWIG_INTERFACE)
+
+INCLUDE(${SWIG_USE_FILE})
+
+FIND_PACKAGE(PythonLibs)
+INCLUDE_DIRECTORIES(${PYTHON_INCLUDE_PATH})
+
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR})
+
+MACRO(MANTA_BUILD_SWIG_MODULE module_name interface_file)
+  SET_SOURCE_FILES_PROPERTIES(${interface_file} PROPERTIES CPLUSPLUS ON)
+  SET_SOURCE_FILES_PROPERTIES(${interface_file} PROPERTIES SWIG_FLAGS "-Wall")
+
+  SWIG_ADD_MODULE(${module_name} python ${interface_file} ${ARGN})
+  SWIG_LINK_LIBRARIES(${module_name} ${PYTHON_LIBRARIES})
+ENDMACRO(MANTA_BUILD_SWIG_MODULE)
+
+MANTA_BUILD_SWIG_MODULE(test test.i)
+MANTA_BUILD_SWIG_MODULE(child child.i child.cc child.h)
+MANTA_BUILD_SWIG_MODULE(parent parent.i parent.h)
+
+MACRO(MANTA_CREATE_SWIG_DEPENDENCIES Bin Output)
+  SET(MANTA_SWIG_DEPEND)
+  SET(MANTA_SWIG_DEPEND_REGENERATE)
+
+  # Include the dependency file.  Create it first if it doesn't exist
+  # for make files except for IDEs (see below).
+  IF(${CMAKE_MAKE_PROGRAM} MATCHES "make")
+    IF(EXISTS ${Bin}/${Output}.depend)
+    ELSE(EXISTS ${Bin}/${Output}.depend)
+      CONFIGURE_FILE(
+        ${CMAKE_SOURCE_DIR}/SwigInterface/test/empty.depend.in
+        ${Bin}/${Output}.depend IMMEDIATE)
+    ENDIF(EXISTS ${Bin}/${Output}.depend)
+    INCLUDE(${Bin}/${Output}.depend)
+  ELSE(${CMAKE_MAKE_PROGRAM} MATCHES "make")
+    # for IDE generators like MS dev only include the depend files
+    # if they exist.   This is to prevent ecessive reloading of
+    # workspaces after each build.   This also means
+    # that the depends will not be correct until cmake
+    # is run once after the build has completed once.
+    # the depend files are created in the wrap tcl/python sections
+    # when the .xml file is parsed.
+    INCLUDE(${Bin}/${Output}.depend OPTIONAL)
+  ENDIF(${CMAKE_MAKE_PROGRAM} MATCHES "make")
+
+  
+ENDMACRO(MANTA_CREATE_SWIG_DEPENDENCIES)

@@ -1,0 +1,8 @@
+#ifndef Manta_Use_MPI_Code_h
+#define Manta_Use_MPI_Code_h
+
+# if ${USE_MPI_DEF}
+#  define USE_MPI 1
+# endif
+
+#endif

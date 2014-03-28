@@ -1,0 +1,117 @@
+Hi, if you are reading this, you are probably wondering what on earth
+all this gunk means and how you are supposed to use it.  Well, let me
+explain it as best I can.
+
+At some point you want to make a callback.  A callback is simply a
+function you want to call at some future point in time.  This function
+can be a global or static class member function (not tied to a
+particular class instance).  It can also be a class member function
+tied to a particular instance.
+
+  global:
+     void print(char* string);
+     void do_something();
+
+
+  static class member function:
+     class MyClass {
+     public:
+       static void printType();
+       static void do_XYZ(int x, int y, int z);
+     };
+
+  class member functions tied to a class instance:
+     class MyClass2 {
+     public:
+       void update();
+       void change_X(float new_X);
+     private:
+       float x;
+     };
+
+Manta currently only supports functions that return void.  As far as
+arguments are concerned there are two types.
+
+    1.  Arguments bound at callback creation time.
+    2.  Arguments bound at callback call time.
+
+These are referred to as Arg (create time) and Data (call time) in the
+code.  The Data arguments are allways proceeded by the Arg arguments.
+
+Let's say you wanted to time how long it takes for a callback to take.
+You can bind the current time it was created when you generate the
+callback and then bind the current time when the callback is called.
+Here's how it would look in code:
+
+  //////////////////////////////////////////////////////////////
+  
+  void printTime(double call_time, double creation_time) {
+     printf("It took %g seconds to call printTime\n", call_time-creation_time);
+  }
+
+  ////////////////////
+  //  At creation time
+
+  CallbackBase_1Data<double>* cb = Callback::create(printTime,
+                                                    Time::currentSeconds());
+  // Register the callback with whatever will call it
+  registerCurrentTimeCallback(cb);
+
+  ////////////////////
+  // At call time
+  for(int i = 0; i < timeCallbacks.size(); ++i)
+    timeCallbacks[i]->call(Time::currentSeconds());
+
+  //////////////////////////////////////////////////////////////
+  
+If your callback is a static member function, simply use the name of
+the function with the class designator:
+
+  CallbackBase_0Data* cb = Callback::create(MyClass::printType);
+  CallbackBase_0Data* cb = Callback::create(MyClass::do_XYZ, 1, 2, 3);
+
+If your callback is a member function bound to a class instance, you
+must also suply a pointer to the class:
+
+  MyClass2* mc;
+  CallbackBase_0Data* cb = Callback::create(mc, &MyClass2::update);
+  CallbackBase_0Data* cb = Callback::create(mc, &MyClass2::change_X, my_x);
+
+
+You don't always need to create a temporary variable for the callback.
+Often, if you know the type of your base class you can simply place
+the Callback::create in the callback registering function call.  This
+is true for MantaInterface's transactions.  The callback is a 0Data
+callback meaning there are no call time bound arguments.
+
+  rtrt_inteface->addTransaction("my callback",
+                                Callback::create(mc, &MyClass2::update));
+
+This might be a good time to discuss the base classes.  The caller
+only needs to know about the call time bound arguments (Data).  It
+does not need to know (and nor can it know) about the creation time
+bound arguments (Arg).
+  
+There is a different base class for every type of call time bound
+argument.  This class is templatized to accommodate any type Data0,
+Data1, Data2, etc. might be.  You have to specify the type when
+storing a list of them:
+
+  vector<CallbackBase_2Data<float, int>*> mySpecialCallbacks;
+
+Classes that are templated against the creation time bounded arguments
+(Arg1, Arg2, Arg3, etc.) are derived from the appropiate base class.
+These template types are determined when you call the create function,
+so you don't have to specify them explicitly.
+
+Since you have to write the code for the various combinations of
+number of Data parameters with the number of Arg parameters this can
+cause quite a lot of code.  We've defined as many of them as we needed
+for the time being, but you may have to add additional ones as you
+need them.
+  
+Caveats:
+
+1. Callbacks to overloaded functions/methods will not work since C++
+   cannot disambiguate the different functions.   You will get a compile-time error.
+

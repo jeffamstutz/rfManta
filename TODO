@@ -1,0 +1,180 @@
+Persistent:
+ - Detect self references?
+ - Error checking in xmlarchive (err codes from libxml2)
+properly handlenamespaces in:
+ - read
+ - write
+ - register
+style-sheet like facility for defaults and other things
+
+Cmake:
+ - Class rtrt fix
+ - Factories
+ - New point/vector? - templated on type and dimensionality
+ - Nix vector2d...
+ - circular dependency from rtrt master to UI - move UI in Engine???
+ - configure threads/time classes properly
+
+Color:
+ - Special class for just RGB (more efficient???)
+
+Code review:
+ - MetalMaterial
+ - Box/Cube
+ - Sampling
+
+General pipeline structure
+
+Scene 0 bookmarked views
+
+Instances: combine common functionality into instancecommon, TransformInstance
+Tighter bounds for difference
+
+BVH: Better builds
+BVH: optimized intersect for constant origin, etc.
+BVH: vectorize
+fix dielectric - no new/delete, other optimizations
+
+Common factory interfaces, registration within each directory...
+
+ruby/swig interface
+No proc/numProcs for serial animation callbacks?
+Idlemodes:
+ - setupFrame needed in IdleMode interface?
+ - idlemode done at setup time (idle pipe vs. normal pipe)?
+ - abort current frame when interactions appear???
+
+ - different interfaces for different situations - changing from callback, from thirdparty thread, etc.
+
+Channels in all of interface
+Separate factories from set in RTRTInterface
+numChannels no longer needed in args to setupBegin
+
+Window resize
+
+template <class _Tp>
+struct maxf : public binary_function<_Tp,_Tp,_Tp> {
+  _Tp operator()(const _Tp& __x, const _Tp& __y) const 
+    { return __x < __y ? __y : __x; }
+};
+
+
+void XWindowUI::prockey(unsigned int, unsigned long key)
+{
+  int value = 1;
+  if(key == XStringToKeysym("P"))
+    value = -1;
+  rtrt_interface->addTransaction("numWorkers",
+				 rtrt_interface->numWorkers(),
+				 compose1(bind2nd(maxf<int>(), 1),
+                                          bind2nd(plus<int>(), value)));
+}
+
+autoview - bbox in a transaction
+pinhole camera hfov != vfov
+Put getCamera() in a transaction????
+Camera sets
+use quaternions for rotation only transforms?
+crash with no display set
+verifier in TValue
+String ID in TValue???
+Nix TValue???
+lookover firstFrame flag and setupFrame logic
+
+barrierWait() in rtrt.h????
+
+ - make RENDER_THREAD_STACKSIZE changable through rtrt interface
+
+ - combine transaction_lock and callbacklock???
+ - nested instancing - how to do scratchpad????
+ - texcoords - transform hitpos instead of rays????
+ - CSG
+ - checker3
+ - bumpmapping?
+ - better transform class (or methods) without if test???
+ - Redo cube...
+ - nested scratchpad
+ - acceleration structures
+ - Cube: use scratchpad to determine normal?
+ - doubles vs. floats???
+ - setting eyepoint, shadowmode, other stuff from scenes
+ - soft shadows?
+ - allow material to optionally override shadow algorithm?
+ - frame out of UV, into object?
+ - map phong exponent in metalmaterial?
+ - should flags get inherited on the way back up?
+ - cos_theta duplicate computation in lambertion/noshadows?
+ - how to keep track of attenuation?
+ - TUNE
+ - separate light intersect
+ - parallel and incremental preprocessing
+ - clean up includes in sphere (notfinished and material.h)
+ - comon material class for light stuff
+ - rewrite noshadows to allow fuller buffers
+ - reduce virtual fns to light in noshadows
+ - get rid of hitInfo struct, just use rayPacket?
+ - how to do bump mapping (in computeNormal)?
+ - implement double-sided lambertian, or a flag?
+ - non-vector interfaces for everything???
+ - consider moving ambient mode, shadow algorthm, other stuff to raytrcerendercontext : public rendercontext?
+ - cvs remove empty .h files
+ - stats infrastructure
+ - write stats to file?
+ - stats on average raypacketsize for primary, shading, shadows, etc.
+ - stereo camera, finish stereo support
+ - better default scene - use one from rt benchmark?
+ - negotiate ray normalization from primitives???
+ - Add textures to materials - template?
+ - Make bigger sos only for top level dirs?
+ - how to do preprocessing - parallel??
+ - make Scene a virtual interface???
+ - maybe don't reset hitinfo in ctor - make packet do it for only the  ones it needs?
+ - crashes if window closes
+ - stereo in pixelSampler - what about fragment?
+ - switch to stereo visual in stereo mode?
+ - Don't do Fragment::element so that they can be vectorized?
+ - Don't put frametime in context, use animation callbacks instead? attach/dech?
+ - glPixelStore setup for odd sized rgb8 images
+ - Use enum instead of or in addition to flags in fragment?
+ - progressive sampling
+ - poll for events in OpenGLDisplay
+ - Input????
+ - file bug with SGI over double-free in opengl
+ - shutdown problems on local display/SGI
+ - worker change callbacks to move contexts...
+ - OpenGLDisplay: test when image xres != window xres
+ - include guards rtrt->manta
+ - check for args in all component ctors
+ - how to do overlay information (stats, etc.)
+ - finish configure script changes
+ - namespace rtrt -> manta
+ - Proper arguments for callbacks (proc/nproc, changed flag, etc)
+ - Other image types: StridedImage, TiledImage, etc.   Compare performance
+ - const correctness, at least in Interface
+ - split up RTRT class into multiple interfaces???
+ - Memory management for components
+ - Complete channel interface - activate/deactivate, remove, etc.
+ - How to reconfigure when idle mode changes something?
+ - idleChangedCallbacks
+ - workersChanged callbacks
+ - how to sync callback - not crowdmonitor
+ - topend performance optimization
+ - traits classes?
+ - CSG
+ - how to unregister callbacks?
+
+
+Scene description language?
+
+Group "g1" {
+   Sphere {
+      center = [0,0,0];
+      radius = 1;
+      material = "matl1";
+   }
+}
+
+<scene >
+<group name="g1">
+   <sphere center="[0,0,0]" radius="1" material="matl1"/>
+</group>

@@ -1,0 +1,17 @@
+./manta -np 8 -res 1000x1000 -scene "lib/libscene_primtest(box -texscale 20 -material checker)" -camera "pinhole(-eye 0 0 8 -lookat 0 0 0 -up 0 1 0 -fov 17)" -shadows noshadows
+
+bin/manta -res 1312x800 -bench 200 10 -imagetraverser null -np 1 -imagedisplay "opengl(-mode image)"
+bin/manta -res 1312x800 -bench 200 10 -imagetraverser null -np 1 -imagedisplay "opengl(-mode texture)"
+
+bin/manta -res 2000x2000 -ui null -pixelsampler "jittersample(-numberOfSamples 9)" -bench 1 0 -imagetype rgba8 -camera "pinhole( -eye 220.825 -259.284 304.412 -lookat 266.845 6.34768 208.678 -up 0.100322 0.213002 0.971888 -fov 46.7236 )" -imagedisplay "file(-type tga -prefix boeing)" -np 15
+bin/manta -res 2048x2048 -imagetype rgb8 -pixelsampler "jittersample(-numberOfSamples 16)" -np 8 -bgc white -camera "pinhole( -eye -368.72 122.805 -333.61 -lookat -16.8221 9.83195 -46.7565 -up 0.162165 0.969657 0.182944 -fov 48.1542 )" -imagetraverser "tiled(-square -tilesize 30x5)" -ui null -imagedisplay "file(-base acura -type png)" -bench 1 0 -scene
+
+# cornell box:  You'll need to increase the size of  MANTA_T_EPSILON from the default 1.e-4 in cmake
+bin/manta -scene ../scenes/cornell_box.rtml 
+
+# view an obj or ply file:
+bin/manta -scene "lib/libscene_triangleSceneViewer( -model myObjFile.obj )"
+
+# useful arguments:
+# take a screenshot:  -bench 1 0 -imagedisplay "file(-type tga -prefix myImageName)"
+# benchmark 100 frames after a 20 frame warmup:  -nodisplaybench  100 20 

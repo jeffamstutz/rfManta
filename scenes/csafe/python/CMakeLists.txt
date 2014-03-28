@@ -1,0 +1,9 @@
+
+INCLUDE(${CMAKE_SOURCE_DIR}/CMake/PythonInvoke.cmake)
+
+PYTHON_ADD_EXECUTABLE(csafe_scene
+  ${CMAKE_CURRENT_SOURCE_DIR}/csafe_scene.py
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_SOURCE_DIR}/SwigInterface
+  ${LIBRARY_OUTPUT_PATH}
+  )

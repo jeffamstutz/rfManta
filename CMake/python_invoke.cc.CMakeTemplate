@@ -1,0 +1,50 @@
+
+#include <Python.h>
+#include <stdio.h>
+
+#include <vector>
+
+const char source_file[] = "${PY_SOURCE_FILE}";
+
+// This program provides an invocation target to run a specific python
+// script.
+int main(int argc, char **argv) {
+
+  // Open the source file.
+  FILE* fp = fopen( source_file, "r" );
+  if (fp == 0) {
+    perror("Could not open source file.");
+    return 1;
+  }
+  
+  // Determine the file length.
+  fseek( fp, 0, SEEK_END );
+  const size_t bytes = ftell( fp );
+  fseek( fp, 0, SEEK_SET );
+
+  // Read in the file.
+  std::vector<char> buffer(bytes+1);
+  fread( &buffer[0], 1, bytes, fp );
+  buffer[bytes] = '\0';
+  fclose( fp );
+  
+  // Setup python.
+  Py_Initialize();
+  PySys_SetArgv(argc,argv);
+
+  // Add hard coded paths.
+  PyRun_SimpleString("import sys\n");
+
+  // These lines added by CMAKE ///////////////////////////////////////////////
+  ${PY_SEARCH_PATH}  
+  /////////////////////////////////////////////////////////////////////////////
+
+  // Invoke the script.
+  // PyRun_SimpleFile( fp, source_file );
+  PyRun_SimpleString( &buffer[0] );
+
+  // Clean up.
+  Py_Finalize();
+
+  return 0;
+}

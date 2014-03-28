@@ -1,0 +1,8 @@
+#ifndef Manta_Use_Private_Code_h
+#define Manta_Use_Private_Code_h
+
+#if ${USE_PRIVATE_CODE_DEF}
+#define USE_PRIVATE_CODE 1
+#endif
+
+#endif

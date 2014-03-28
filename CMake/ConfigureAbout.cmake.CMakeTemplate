@@ -1,0 +1,38 @@
+
+# Note this file uses (at)VAR(at) for all variables replaced during 
+# CONFIGURE_FILE.
+
+
+# Execute svn status.
+MESSAGE( STATUS "Locating svn")
+FIND_PROGRAM(Subversion_SVN_EXECUTABLE svn
+  DOC "subversion command line client")
+
+IF(Subversion_SVN_EXECUTABLE)
+  MESSAGE( STATUS "Executing: svn info @CMAKE_SOURCE_DIR@" )
+  EXEC_PROGRAM(${Subversion_SVN_EXECUTABLE} ARGS info @CMAKE_SOURCE_DIR@
+    OUTPUT_VARIABLE SVN_OUTPUT )
+
+  # Replace newlines with escape sequence.
+  STRING(REGEX REPLACE "\n" "\\\\n" SVN_OUTPUT ${SVN_OUTPUT})
+
+  # Set the about string.
+  SET(ABOUT_STRING ${SVN_OUTPUT} 
+    "\\n\\n"
+    "Build Type: @CMAKE_BUILD_TYPE@ \\n"
+    "Compiler:   @CMAKE_CXX_COMPILER@ \\n"
+    )
+ELSE(Subversion_SVN_EXECUTABLE)
+  SET(ABOUT_STRING "svn command not found: svn info unavailable\\\n")
+ENDIF(Subversion_SVN_EXECUTABLE)
+
+SET(CMAKE_BACKWARDS_COMPATIBILITY 2.4)
+
+# Configure the source file.
+MESSAGE( STATUS "Configuring @ABOUT_SRC@" )
+CONFIGURE_FILE(
+  @Manta_SOURCE_DIR@/include/About.cc.CMakeTemplate
+  @ABOUT_SRC@
+)
+
+
