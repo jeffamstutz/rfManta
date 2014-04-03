@@ -21,6 +21,7 @@
 #include <Model/Groups/KDTree.h>
 #include <Model/Groups/ObjGroup.h>
 #include <Model/Groups/RecursiveGrid.h>
+#include <Model/Groups/RFGraph.h>
 #include <Model/Materials/Dielectric.h>
 #include <Model/Materials/Flat.h>
 #include <Model/Materials/Lambertian.h>
@@ -412,6 +413,9 @@ Scene* make_scene(const ReadContext&, const vector<string>& args)
     } else if (arg == "-rgrid") {
       delete as;
       as = new RecursiveGrid;
+    } else if (arg == "-RFGraph") {
+      delete as;
+      as = new RFGraph;
     } else if (arg == "-CGT") {
 #ifdef USE_PRIVATE_CODE
       delete as;

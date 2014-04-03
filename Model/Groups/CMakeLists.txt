@@ -15,6 +15,7 @@ SET (Manta_Groups_SRCS
      Groups/ObjGroup.h
      Groups/ObjGroup.cc
      Groups/RecursiveGrid
+     Groups/RFGraph
      Groups/TreeTraversalProbability.cc
      Groups/BSP/BSP
      Groups/BSP/BSH
