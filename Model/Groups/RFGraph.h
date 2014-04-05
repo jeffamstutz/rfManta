@@ -39,6 +39,11 @@ namespace Manta
 
     void computeBounds(const PreprocessContext& context, BBox& bbox) const;
 
+  private:
+
+    // Private data members ///////////////////////////////////////////////////
+
+    void *graph;
   };
 
 }
