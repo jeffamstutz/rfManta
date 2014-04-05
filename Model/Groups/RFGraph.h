@@ -28,12 +28,12 @@ namespace Manta
 
     // Not yet implemented //
 
-    void setGroup(Group* new_group){ /*no op*/ }
-    void groupDirty(){ /*no op*/ }
-    Group* getGroup() const { return NULL; }
-    void rebuild(int proc=0, int numProcs=1){ /*no op*/ }
+    void setGroup(Group* new_group);
+    void groupDirty();
+    Group* getGroup() const;
+    void rebuild(int proc=0, int numProcs=1);
     void addToUpdateGraph(ObjectUpdateGraph* graph,
-                          ObjectUpdateGraphNode* parent){ /*no op*/ }
+                          ObjectUpdateGraphNode* parent);
 
     // Overridden from Object (through AccelerationStructure) /////////////////
 
