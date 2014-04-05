@@ -72,6 +72,7 @@
 
 #elif defined(__GNUC__) && defined(__linux)
 #include <execinfo.h>
+#include <unistd.h>
 #endif
 
 

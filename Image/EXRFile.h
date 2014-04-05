@@ -33,13 +33,8 @@
 #include <string>
 #include <vector>
 
-
-namespace Imf 
-{
-  class Rgba;
-  class Header;
-}
-
+#include <OpenEXR/ImfRgba.h>
+#include <OpenEXR/ImfHeader.h>
 
 namespace Manta 
 {

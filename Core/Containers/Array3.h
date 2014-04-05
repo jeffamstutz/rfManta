@@ -50,6 +50,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <Core/Util/Assert.h>
+#include <unistd.h>
 
 namespace Manta {
 

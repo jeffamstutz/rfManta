@@ -49,6 +49,7 @@
 #include <algorithm>
 #include <iostream>
 #include <fstream>
+#include <unistd.h>
 
 
 #include "UsePrivateCode.h"

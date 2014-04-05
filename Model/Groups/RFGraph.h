@@ -8,10 +8,14 @@ namespace Manta
 
   class RFGraph : public AccelerationStructure
   {
+
   public:
+
     RFGraph();
 
-    // Overridden from AccelerationStructure ////////////////////////////////
+    ~RFGraph();
+
+    // Overridden from AccelerationStructure //////////////////////////////////
 
     // Currently implemented //
 
@@ -27,9 +31,13 @@ namespace Manta
     void setGroup(Group* new_group){ /*no op*/ }
     void groupDirty(){ /*no op*/ }
     Group* getGroup() const { return NULL; }
-    rebuild(int proc=0, int numProcs=1){ /*no op*/ }
+    void rebuild(int proc=0, int numProcs=1){ /*no op*/ }
     void addToUpdateGraph(ObjectUpdateGraph* graph,
                           ObjectUpdateGraphNode* parent){ /*no op*/ }
+
+    // Overridden from Object (through AccelerationStructure) /////////////////
+
+    void computeBounds(const PreprocessContext& context, BBox& bbox) const;
 
   };
 
