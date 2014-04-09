@@ -23,6 +23,7 @@ SET (Manta_Groups_SRCS
      Groups/BSP/Polytope
      Groups/BSP/aip.h
      Groups/BSP/chainHull.h
+     Groups/Rayforce/Rayforce
 )
 
 # Include private code if available

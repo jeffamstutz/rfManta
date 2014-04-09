@@ -1,4 +1,11 @@
 
+#Find Rayforce Library for Groups/Rayforce.*
+FIND_PACKAGE(Rayforce)
+
+INCLUDE_DIRECTORIES(
+    ${RAYFORCE_INCLUDE_DIR}
+)
+
 INCLUDE (AmbientLights/CMakeLists.txt)
 INCLUDE (Backgrounds/CMakeLists.txt)
 INCLUDE (Cameras/CMakeLists.txt)
@@ -40,5 +47,6 @@ TARGET_LINK_LIBRARIES(Manta_Model
   Manta_Interface
   Manta_Core
   ${Manta_Model_extra_libs}
+  ${RAYFORCE_LIBRARIES}
   )
 
