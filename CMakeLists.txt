@@ -92,6 +92,13 @@ INCLUDE (${CMAKE_ROOT}/Modules/FindThreads.cmake)
 # Find ZLib
 INCLUDE (${CMAKE_ROOT}/Modules/FindZLIB.cmake)
 
+#Find Rayforce Library for Groups/Rayforce.*
+FIND_PACKAGE(Rayforce)
+
+INCLUDE_DIRECTORIES(
+    ${RAYFORCE_INCLUDE_DIR}
+)
+
 ###############################################################################
 ###############################################################################
 # Set some system level stuff

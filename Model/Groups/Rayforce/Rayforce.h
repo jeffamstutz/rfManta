@@ -17,6 +17,7 @@ namespace rfut
 
 namespace Manta
 {
+  class Lambertian;
 
   class Rayforce : public AccelerationStructure
   {
@@ -70,6 +71,9 @@ namespace Manta
     rfut::TraceFcn<Target::System>* traceFcn;
 
     bool inited;
+
+    // Fake material data
+    Lambertian *material;
 
   };
 

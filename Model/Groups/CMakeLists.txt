@@ -24,6 +24,12 @@ SET (Manta_Groups_SRCS
      Groups/BSP/aip.h
      Groups/BSP/chainHull.h
      Groups/Rayforce/Rayforce
+     Groups/Rayforce/rfPipeline.c
+     Groups/Rayforce/rfStruct.h
+)
+
+set_source_files_properties(Groups/Rayforce/rfPipeline.c
+  PROPERTIES COMPILE_FLAGS "-msse4.1 -std=gnu99"
 )
 
 # Include private code if available

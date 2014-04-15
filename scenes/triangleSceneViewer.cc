@@ -22,6 +22,7 @@
 #include <Model/Groups/ObjGroup.h>
 #include <Model/Groups/RecursiveGrid.h>
 #include <Model/Groups/RFGraph.h>
+#include <Model/Groups/Rayforce/Rayforce.h>
 #include <Model/Materials/Dielectric.h>
 #include <Model/Materials/Flat.h>
 #include <Model/Materials/Lambertian.h>
@@ -417,6 +418,9 @@ Scene* make_scene(const ReadContext&, const vector<string>& args)
     } else if (arg == "-RFGraph") {
       delete as;
       as = new RFGraph;
+    } else if (arg == "-Rayforce") {
+      delete as;
+      as = new Rayforce;
     } else if (arg == "-CGT") {
 #ifdef USE_PRIVATE_CODE
       delete as;

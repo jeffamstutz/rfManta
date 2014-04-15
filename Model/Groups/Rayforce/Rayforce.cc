@@ -15,7 +15,16 @@
 #include <rfut/Scene.t>
 #include <rfut/TraceFcn.t>
 
+#include "rfStruct.h"
+
+#include "Interface/RayPacket.h"
+#include "Model/Materials/Lambertian.h"
+#include "Core/Color/Color.h"
+#include "Core/Geometry/BBox.h"
+
 using namespace Manta;
+
+extern rfPipeline rfRays;
 
 Rayforce::Rayforce() :
   context(0),
@@ -24,7 +33,8 @@ Rayforce::Rayforce() :
   scene(0),
   device(0),
   traceFcn(0),
-  inited(false)
+  inited(false),
+  material(new Lambertian(Color::white()))
 {
   /*no-op*/
 }
@@ -32,6 +42,8 @@ Rayforce::Rayforce() :
 Rayforce::~Rayforce()
 {
   cleanup();
+
+  delete material;
 }
 
 bool Rayforce::buildFromFile(const std::string &fileName)
@@ -46,7 +58,7 @@ bool Rayforce::buildFromFile(const std::string &fileName)
   object->attach(*model);
   scene->acquire();
 
-  //traceFcn = new rfut::TraceFcn<Target::System>(*scene, rfTrace);
+  traceFcn = new rfut::TraceFcn<Target::System>(*scene, rfRays);
 
   inited = true;
 
@@ -56,8 +68,36 @@ bool Rayforce::buildFromFile(const std::string &fileName)
 
 void Rayforce::intersect(const RenderContext& context, RayPacket& rays) const
 {
-  fprintf(stderr, "intersect()\n");
-  //TODO: intersect rays
+  //fprintf(stderr, "intersect()\n");
+
+  for(int i = rays.begin(); i < rays.end(); ++i)
+  {
+    rfRaySingle ray;
+
+    ray.origin[0] = rays.getRay(i).origin().x();
+    ray.origin[1] = rays.getRay(i).origin().y();
+    ray.origin[2] = rays.getRay(i).origin().z();
+
+    ray.vector[0] = rays.getRay(i).direction().x();
+    ray.vector[1] = rays.getRay(i).direction().y();
+    ray.vector[2] = rays.getRay(i).direction().z();
+
+    ray.root = scene->resolve(ray.origin);
+
+    rfRayData rayData;
+
+    (*traceFcn)(ray, rayData);
+
+    if(rayData.hit)
+    {
+      rays.hit(i, rayData.hit, material, 0, 0);
+      //rays.overrideMinT(i, rayData.minT);
+      //rays.setHitMaterial(i, material);
+      //rays.setHitPosition(i, Vector(rayData.pos[0],
+      //                              rayData.pos[1],
+      //                              rayData.pos[2]));
+    }
+  }
 }
 
 void Rayforce::setGroup(Group* /*new_group*/)
@@ -94,7 +134,11 @@ void Rayforce::addToUpdateGraph(ObjectUpdateGraph* /*graph*/,
 void Rayforce::computeBounds(const PreprocessContext& context, BBox& bbox) const
 {
   fprintf(stderr, "computeBounds()\n");
-  //TODO: compute bounds
+  float box[6];
+  rfGetBoundingBoxf(scene->getRawPtr(), box);
+  Vector min(box[0], box[2], box[4]);
+  Vector max(box[1], box[3], box[5]);
+  bbox = BBox(min, max);
 }
 
 void Rayforce::initialize()
