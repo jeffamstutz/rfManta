@@ -85,7 +85,6 @@ void Rayforce::intersect(const RenderContext& context, RayPacket& rays) const
 {
   //fprintf(stderr, "intersect()\n");
 
-#if 1
   for(int i = rays.begin(); i < rays.end(); ++i)
   {
     rfRaySingle ray;
@@ -113,7 +112,6 @@ void Rayforce::intersect(const RenderContext& context, RayPacket& rays) const
     else
       rays.resetHit(i);
   }
-#endif
 }
 
 void Rayforce::setGroup(Group* new_group)
@@ -214,6 +212,12 @@ void Rayforce::computeBounds(const PreprocessContext& context, BBox& bbox) const
 #else
   currMesh->computeBounds(context, bbox);
 #endif
+}
+
+void Rayforce::preprocess(const PreprocessContext &context)
+{
+  fprintf(stderr, "preprocess()\n");
+  currMesh->preprocess(context);
 }
 
 void Rayforce::computeTexCoords2(const RenderContext &, RayPacket &) const

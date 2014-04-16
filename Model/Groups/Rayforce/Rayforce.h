@@ -43,11 +43,15 @@ namespace Manta
     // Intersect a packet of rays against the rfgraph
     void intersect(const RenderContext& context, RayPacket& rays) const;
 
+    // Set the mesh to be traced
+    void setGroup(Group* new_group);
+
+    // Get the current mesh
+    Group* getGroup() const;
+
     // Not yet implemented //
 
-    void setGroup(Group* new_group);
     void groupDirty();
-    Group* getGroup() const;
     void rebuild(int proc=0, int numProcs=1);
     void addToUpdateGraph(ObjectUpdateGraph* graph,
                           ObjectUpdateGraphNode* parent);
@@ -55,6 +59,8 @@ namespace Manta
     // Overridden from Object (through AccelerationStructure) /////////////////
 
     void computeBounds(const PreprocessContext& context, BBox& bbox) const;
+
+    void preprocess(const PreprocessContext &context);
 
     // Overridden from TexCoordMapper /////////////////////////////////////////
 
