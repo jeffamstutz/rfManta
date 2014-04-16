@@ -4,6 +4,7 @@
 #include <Interface/AccelerationStructure.h>
 
 #include <rfut/Target.h>
+#include "Interface/TexCoordMapper.h"
 
 namespace rfut
 {
@@ -17,9 +18,10 @@ namespace rfut
 
 namespace Manta
 {
-  class Lambertian;
+  class Mesh;
 
-  class Rayforce : public AccelerationStructure
+  class Rayforce : public AccelerationStructure,
+                   public TexCoordMapper
   {
 
   public:
@@ -33,8 +35,10 @@ namespace Manta
     // Currently implemented //
 
     // Load pre-built Rayforce graph cache from a file
-    // NOTE: currently the only way to use Rayforce
     bool buildFromFile(const std::string &fileName);
+
+    // Save out the Rayforce graph cache
+    bool saveToFile(const std::string &fileName);
 
     // Intersect a packet of rays against the rfgraph
     void intersect(const RenderContext& context, RayPacket& rays) const;
@@ -51,6 +55,12 @@ namespace Manta
     // Overridden from Object (through AccelerationStructure) /////////////////
 
     void computeBounds(const PreprocessContext& context, BBox& bbox) const;
+
+    // Overridden from TexCoordMapper /////////////////////////////////////////
+
+    void computeTexCoords2(const RenderContext&, RayPacket&) const;
+
+    void computeTexCoords3(const RenderContext&, RayPacket&) const;
 
   private:
 
@@ -72,9 +82,7 @@ namespace Manta
 
     bool inited;
 
-    // Fake material data
-    Lambertian *material;
-
+    Mesh* currMesh;
   };
 
 }

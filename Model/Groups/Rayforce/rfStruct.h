@@ -21,12 +21,20 @@ extern "C"
 {
 #endif // __cplusplus
 
+  // Per-triangle data
+  typedef struct
+  {
+    size_t triID;
+    int    matID;
+  } rfTriangleData;
+
   // Per-ray data (primary rays)
   typedef struct
   {
-    int hit;
-    float minT;
-    float pos[3];
+    int    hit;
+    float  minT;
+    size_t triID;
+    int    matID;
   } rfRayData;
 
 #ifdef __cplusplus

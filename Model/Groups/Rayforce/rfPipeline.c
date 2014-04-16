@@ -35,7 +35,7 @@
 #define TRACEHITVECTOR     (0)
 #define TRACEHITPOINT      (1)
 #define TRACEHITUV         (0)
-#define TRACEHITDATA       (0)
+#define TRACEHITDATA       (1)
 #define TRACEHITDIST       (1)
 #define TRACEHITPLANE      (0)
 #define TRACEHITSIDE       (0)
@@ -56,12 +56,11 @@ RF_INLINE void rfHitFcn(rfRayData* rayData,
                         float* matrix)
 {
   rayData->hit = 1;
-
   rayData->minT = hitdist;
 
-  rayData->pos[0] = hitpt[0];
-  rayData->pos[1] = hitpt[1];
-  rayData->pos[2] = hitpt[2];
+  rfTriangleData* data = (rfTriangleData*)tridata;
+  rayData->triID = data->triID;
+  rayData->matID = data->matID;
 }
 
 RF_INLINE void rfVoidFcn(rfRayData* rayData, float* dir, rfRoot root)
