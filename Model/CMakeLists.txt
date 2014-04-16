@@ -6,6 +6,18 @@ INCLUDE_DIRECTORIES(
     ${RAYFORCE_INCLUDE_DIR}
 )
 
+#############################################
+# Locate OpenEXR
+INCLUDE (${CMAKE_SOURCE_DIR}/CMake/FindOpenEXR.cmake)
+
+IF (OpenEXR_FOUND)
+  # Add the EXR files
+  SET (EXR_SRC EXRFile.h EXRFile.cc)
+  INCLUDE_DIRECTORIES(${OpenEXR_Include_Dir})
+ELSE(OpenEXR_FOUND)
+  SET (EXR_SRC EXRFile.h EXRFile-stub.cc)
+ENDIF(OpenEXR_FOUND)
+
 INCLUDE (AmbientLights/CMakeLists.txt)
 INCLUDE (Backgrounds/CMakeLists.txt)
 INCLUDE (Cameras/CMakeLists.txt)
