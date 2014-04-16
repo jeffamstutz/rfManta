@@ -89,13 +89,15 @@ void Rayforce::intersect(const RenderContext& context, RayPacket& rays) const
   {
     rfRaySingle ray;
 
-    ray.origin[0] = rays.getRay(i).origin().x();
-    ray.origin[1] = rays.getRay(i).origin().y();
-    ray.origin[2] = rays.getRay(i).origin().z();
+    Manta::Ray mray = rays.getRay(i);
 
-    ray.vector[0] = rays.getRay(i).direction().x();
-    ray.vector[1] = rays.getRay(i).direction().y();
-    ray.vector[2] = rays.getRay(i).direction().z();
+    ray.origin[0] = mray.origin().x();
+    ray.origin[1] = mray.origin().y();
+    ray.origin[2] = mray.origin().z();
+
+    ray.vector[0] = mray.direction().x();
+    ray.vector[1] = mray.direction().y();
+    ray.vector[2] = mray.direction().z();
 
     ray.root = scene->resolve(ray.origin);
 
