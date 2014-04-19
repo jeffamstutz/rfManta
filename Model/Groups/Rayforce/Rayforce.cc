@@ -85,20 +85,33 @@ void Rayforce::intersect(const RenderContext& context, RayPacket& rays) const
 {
   //fprintf(stderr, "intersect(): rays %i-%i\n", rays.begin(), rays.end());
 
+  rfRaySingle ray;
+  rfRaySingleInit(&ray);
+
+  if(rays.getFlag(RayPacket::ConstantOrigin))
+  {
+    Manta::Ray mray = rays.getRay(rays.begin());
+    ray.root = scene->resolve((float*)mray.origin().data);
+    ray.origin[0] = mray.origin()[0];
+    ray.origin[1] = mray.origin()[1];
+    ray.origin[2] = mray.origin()[2];
+  }
+
   for(int i = rays.begin(); i < rays.end(); ++i)
   {
-    rfRaySingle ray;
-    rfRaySingleInit(&ray);
-
     Manta::Ray mray = rays.getRay(i);
 
-    ray.origin[0] = mray.origin().x();
-    ray.origin[1] = mray.origin().y();
-    ray.origin[2] = mray.origin().z();
+    if(!rays.getFlag(RayPacket::ConstantOrigin))
+    {
+      ray.root = scene->resolve((float*)mray.origin().data);
+      ray.origin[0] = mray.origin()[0];
+      ray.origin[1] = mray.origin()[1];
+      ray.origin[2] = mray.origin()[2];
+    }
 
-    ray.vector[0] = mray.direction().x();
-    ray.vector[1] = mray.direction().y();
-    ray.vector[2] = mray.direction().z();
+    ray.vector[0] = mray.direction()[0];
+    ray.vector[1] = mray.direction()[1];
+    ray.vector[2] = mray.direction()[2];
 
     ray.root = scene->resolve(ray.origin);
 
