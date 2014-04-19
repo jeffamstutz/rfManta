@@ -83,11 +83,12 @@ bool Rayforce::saveToFile(const string &fileName)
 
 void Rayforce::intersect(const RenderContext& context, RayPacket& rays) const
 {
-  //fprintf(stderr, "intersect()\n");
+  //fprintf(stderr, "intersect(): rays %i-%i\n", rays.begin(), rays.end());
 
   for(int i = rays.begin(); i < rays.end(); ++i)
   {
     rfRaySingle ray;
+    rfRaySingleInit(&ray);
 
     Manta::Ray mray = rays.getRay(i);
 
