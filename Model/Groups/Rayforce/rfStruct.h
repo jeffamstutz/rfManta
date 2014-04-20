@@ -35,6 +35,7 @@ extern "C"
     float  minT;
     size_t triID;
     int    matID;
+    float  normal[3];
   } rfRayData;
 
 #ifdef __cplusplus
