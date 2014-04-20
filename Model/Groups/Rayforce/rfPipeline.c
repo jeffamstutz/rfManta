@@ -33,7 +33,7 @@
 #define TRACEHITMODELDATA  (0)
 #define TRACEHITOBJECTDATA (0)
 #define TRACEHITVECTOR     (0)
-#define TRACEHITPOINT      (1)
+#define TRACEHITPOINT      (0)
 #define TRACEHITUV         (0)
 #define TRACEHITDATA       (1)
 #define TRACEHITDIST       (1)

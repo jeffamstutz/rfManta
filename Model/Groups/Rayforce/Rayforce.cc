@@ -88,10 +88,10 @@ void Rayforce::intersect(const RenderContext& context, RayPacket& rays) const
   if(rays.getFlag(RayPacket::ConstantOrigin))
   {
     Manta::Ray mray = rays.getRay(rays.begin());
-    ray.root = scene->resolve((float*)mray.origin().data);
     ray.origin[0] = mray.origin()[0];
     ray.origin[1] = mray.origin()[1];
     ray.origin[2] = mray.origin()[2];
+    ray.root = scene->resolve(ray.origin);
   }
 
   for(int i = rays.begin(); i < rays.end(); ++i)
@@ -100,17 +100,15 @@ void Rayforce::intersect(const RenderContext& context, RayPacket& rays) const
 
     if(!rays.getFlag(RayPacket::ConstantOrigin))
     {
-      ray.root = scene->resolve((float*)mray.origin().data);
       ray.origin[0] = mray.origin()[0];
       ray.origin[1] = mray.origin()[1];
       ray.origin[2] = mray.origin()[2];
+      ray.root = scene->resolve(ray.origin);
     }
 
     ray.vector[0] = mray.direction()[0];
     ray.vector[1] = mray.direction()[1];
     ray.vector[2] = mray.direction()[2];
-
-    ray.root = scene->resolve(ray.origin);
 
     rfRayData rayData;
 
