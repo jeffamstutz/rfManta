@@ -37,7 +37,6 @@ Rayforce::Rayforce() :
   scene(0),
   device(0),
   traceFcn(0),
-  inited(false),
   currMesh(0)
 {
   /*no-op*/
@@ -61,8 +60,6 @@ bool Rayforce::buildFromFile(const std::string &fileName)
   scene->acquire();
 
   traceFcn = new rfut::TraceFcn<Target::System>(*scene, rfRays);
-
-  inited = true;
 
   // Finished loading the graph cache, return success
   return true;
@@ -125,8 +122,8 @@ void Rayforce::intersect(const RenderContext& context, RayPacket& rays) const
       Primitive *primitive = (Primitive*)currMesh->get(rayData.triID);
       rays.hit(i, rayData.minT, material, primitive, this);
     }
-    else
-      rays.resetHit(i);
+    //else
+    //  rays.resetHit(i);
   }
 }
 
@@ -136,7 +133,59 @@ void Rayforce::setGroup(Group* new_group)
 
   Mesh *mesh = dynamic_cast<Mesh*>(new_group);
 
-  // Check to see if we have a mesh and we haven't loaded a graph cache
+  // Set the current mesh to the one we just got
+  if(mesh)
+    currMesh = mesh;
+}
+
+void Rayforce::groupDirty()
+{
+  fprintf(stderr, "groupDirty()\n");
+  /*no op*/
+}
+
+Group* Rayforce::getGroup() const
+{
+  fprintf(stderr, "getGroup()\n");
+  return currMesh;
+}
+
+void Rayforce::rebuild(int /*proc*/, int /*numProcs*/)
+{
+  fprintf(stderr, "rebuild()\n");
+  /*no op*/
+}
+
+void Rayforce::addToUpdateGraph(ObjectUpdateGraph* /*graph*/,
+                                ObjectUpdateGraphNode* /*parent*/)
+{
+  fprintf(stderr, "addToUpdateGraph()\n");
+  /*no op*/
+}
+
+void Rayforce::computeBounds(const PreprocessContext& context, BBox& bbox) const
+{
+  fprintf(stderr, "computeBounds()\n");
+#if 0
+  float box[6];
+  rfGetBoundingBoxf(scene->getRawPtr(), box);
+  Vector min(box[0], box[2], box[4]);
+  Vector max(box[1], box[3], box[5]);
+  bbox = BBox(min, max);
+#else
+  currMesh->computeBounds(context, bbox);
+#endif
+}
+
+void Rayforce::preprocess(const PreprocessContext &context)
+{
+  fprintf(stderr, "preprocess()\n");
+
+  currMesh->preprocess(context);
+
+  Mesh *mesh = currMesh;
+
+  // Check to see if we haven't loaded a graph cache
   if(mesh && !model)
   {
     // Re-initialize rfut objects
@@ -183,57 +232,7 @@ void Rayforce::setGroup(Group* new_group)
 
     // Allocate the trace function
     traceFcn = new rfut::TraceFcn<Target::System>(*scene, rfRays);
-
-    // Set the current mesh to the one we just got
-    currMesh = mesh;
-
-    inited = true;
   }
-}
-
-void Rayforce::groupDirty()
-{
-  fprintf(stderr, "groupDirty()\n");
-  /*no op*/
-}
-
-Group* Rayforce::getGroup() const
-{
-  fprintf(stderr, "getGroup()\n");
-  return currMesh;
-}
-
-void Rayforce::rebuild(int /*proc*/, int /*numProcs*/)
-{
-  fprintf(stderr, "rebuild()\n");
-  /*no op*/
-}
-
-void Rayforce::addToUpdateGraph(ObjectUpdateGraph* /*graph*/,
-                                ObjectUpdateGraphNode* /*parent*/)
-{
-  fprintf(stderr, "addToUpdateGraph()\n");
-  /*no op*/
-}
-
-void Rayforce::computeBounds(const PreprocessContext& context, BBox& bbox) const
-{
-  fprintf(stderr, "computeBounds()\n");
-#if 0
-  float box[6];
-  rfGetBoundingBoxf(scene->getRawPtr(), box);
-  Vector min(box[0], box[2], box[4]);
-  Vector max(box[1], box[3], box[5]);
-  bbox = BBox(min, max);
-#else
-  currMesh->computeBounds(context, bbox);
-#endif
-}
-
-void Rayforce::preprocess(const PreprocessContext &context)
-{
-  fprintf(stderr, "preprocess()\n");
-  currMesh->preprocess(context);
 }
 
 void Rayforce::computeTexCoords2(const RenderContext &, RayPacket &) const
@@ -279,6 +278,4 @@ void Rayforce::cleanup()
   delete object;
   delete scene;
   delete context;
-
-  inited = false;
 }

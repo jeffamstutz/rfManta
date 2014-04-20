@@ -86,8 +86,6 @@ namespace Manta
     rfut::Device<Target::System>*   device;
     rfut::TraceFcn<Target::System>* traceFcn;
 
-    bool inited;
-
     Mesh* currMesh;
   };
 
