@@ -4,8 +4,6 @@
 #include "Interface/AccelerationStructure.h"
 #include "Interface/TexCoordMapper.h"
 
-#include <stdio.h>
-
 namespace Manta
 {
   class Mesh;
@@ -59,11 +57,7 @@ namespace Manta
 
     void initialize();
 
-    void cleanup();
-
     // Private data members ///////////////////////////////////////////////////
-
-    // Embree related data
 
     Mesh* currMesh;
   };
