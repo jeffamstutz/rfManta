@@ -4,6 +4,7 @@ SET (Manta_Groups_SRCS
      Groups/Clip.cc
      Groups/DynBVH.h
      Groups/DynBVH.cc
+     Groups/Embree
      Groups/Group.cc
      Groups/Group.h
      Groups/KDTree.h
