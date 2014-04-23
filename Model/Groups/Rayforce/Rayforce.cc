@@ -37,6 +37,7 @@ Rayforce::Rayforce() :
   scene(0),
   device(0),
   traceFcn(0),
+  saveToFileName(""),
   currMesh(0)
 {
   /*no-op*/
@@ -69,13 +70,9 @@ bool Rayforce::saveToFile(const string &fileName)
 {
   fprintf(stderr, "saveToFile()\n");
 
-  if(model)
-  {
-    model->saveCacheFile(fileName);
-    return true;
-  }
+  saveToFileName = fileName;
 
-  return false;
+  return true;
 }
 
 void Rayforce::intersect(const RenderContext& context, RayPacket& rays) const
@@ -233,6 +230,10 @@ void Rayforce::preprocess(const PreprocessContext &context)
 
     // Allocate the trace function
     traceFcn = new rfut::TraceFcn<Target::System>(*scene, rfRays);
+
+    // Save the cache file out if we got a filename from saveToFile()
+    if(!saveToFileName.empty())
+      model->saveCacheFile(saveToFileName);
   }
 }
 

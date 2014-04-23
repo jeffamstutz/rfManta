@@ -86,6 +86,8 @@ namespace Manta
     rfut::Device<Target::System>*   device;
     rfut::TraceFcn<Target::System>* traceFcn;
 
+    std::string saveToFileName;
+
     Mesh* currMesh;
   };
 
