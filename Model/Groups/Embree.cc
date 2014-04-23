@@ -23,6 +23,7 @@ typedef float Vertex[4];
 RTCScene scene;
 
 Embree::Embree() :
+  inited(false),
   currMesh(0)
 {
   /*no-op*/
@@ -31,7 +32,6 @@ Embree::Embree() :
 Embree::~Embree()
 {
   rtcDeleteScene(scene);
-  delete scene;
 }
 
 bool Embree::buildFromFile(const std::string &/*fileName*/)
@@ -89,11 +89,11 @@ void Embree::intersect(const RenderContext&/*context*/, RayPacket& rays) const
 
     if(ray.geomID != (int)RTC_INVALID_GEOMETRY_ID)
     {
-      Material *material = 0;//currMesh->materials[rayData.matID];
-      Primitive *primitive = 0;//(Primitive*)currMesh->get(rayData.triID);
+      uint mid = currMesh->face_material[ray.primID];
+      Material *material = currMesh->materials[mid];
+      Primitive *primitive = (Primitive*)currMesh->get(ray.primID);
       rays.hit(i, ray.tfar, material, primitive, this);
-      Vector normal(ray.Ng[0], ray.Ng[1], ray.Ng[2]);
-      rays.setNormal(i, normal);
+      rays.setNormal(i, Vector(ray.Ng[0], ray.Ng[1], ray.Ng[2]));
     }
   }
 
@@ -151,68 +151,51 @@ void Embree::preprocess(const PreprocessContext &context)
   Mesh *mesh = currMesh;
 
   // Check to see if we haven't loaded a graph cache
-  if(mesh)
+  if(mesh && !inited)
   {
-    // Re-initialize rfut objects
-    initialize();
+    // Initialize Embree
+    try
+    {
+      rtcInit();
+    }
+    catch(std::exception e)
+    {
+      fprintf(stderr, "catching init error: %s\n", e.what());
+    }
 
-    // Extract out triangle mesh data into temporary memory for rfut consumption
     uint ntris = mesh->face_material.size();
     uint nverts = mesh->vertices.size();
 
-    float* vertices = new float[3*mesh->vertices.size()];
-    for(uint i = 0; i < nverts; ++i)
-    {
-      vertices[3*i+0] = mesh->vertices[i][0];
-      vertices[3*i+1] = mesh->vertices[i][1];
-      vertices[3*i+2] = mesh->vertices[i][2];
-    }
-
-    uint* indices = new uint[mesh->vertex_indices.size()];
-    for(uint i = 0; i < mesh->vertex_indices.size(); ++i)
-      indices[i] = mesh->vertex_indices[i];
-
-#if 0
-    rfTriangleData* tridata = new rfTriangleData[ntris];
-    for(uint i = 0; i < ntris; ++i)
-    {
-      tridata[i].triID = i;
-      tridata[i].matID = mesh->face_material[i];
-    }
-#endif
-
     // Set the Embree model data using the extracted mesh data
 
-    scene = rtcNewScene(RTC_SCENE_STATIC, RTC_INTERSECT8);
-    uint mesh = rtcNewTriangleMesh(scene, RTC_GEOMETRY_STATIC, ntris, nverts);
+    scene = rtcNewScene(RTC_SCENE_STATIC, RTC_INTERSECT1);
+    uint ebMesh = rtcNewTriangleMesh(scene, RTC_GEOMETRY_STATIC, ntris, nverts);
 
-    Triangle* triangles = (Triangle*)rtcMapBuffer(scene,mesh,RTC_INDEX_BUFFER);
-    Vertex*    verts    = (Vertex*)rtcMapBuffer(scene,mesh,RTC_VERTEX_BUFFER);
+    Triangle* triangles =
+            (Triangle*)rtcMapBuffer(scene, ebMesh, RTC_INDEX_BUFFER);
+    Vertex*    verts    =
+            (Vertex*)rtcMapBuffer(scene, ebMesh, RTC_VERTEX_BUFFER);
 
     for (uint i = 0; i < nverts; ++i)
     {
-        verts[i][0] = vertices[3*i+0];
-        verts[i][1] = vertices[3*i+1];
-        verts[i][2] = vertices[3*i+2];
+        verts[i][0] = mesh->vertices[i][0];
+        verts[i][1] = mesh->vertices[i][1];
+        verts[i][2] = mesh->vertices[i][2];
     }
 
     for (uint i = 0; i < ntris; ++i)
     {
-        triangles[i][0] = indices[3*i+0];
-        triangles[i][1] = indices[3*i+1];
-        triangles[i][2] = indices[3*i+2];
+        triangles[i][0] = mesh->vertex_indices[3*i+0];
+        triangles[i][1] = mesh->vertex_indices[3*i+1];
+        triangles[i][2] = mesh->vertex_indices[3*i+2];
     }
 
-    rtcUnmapBuffer(scene, mesh, RTC_INDEX_BUFFER);
-    rtcUnmapBuffer(scene, mesh, RTC_VERTEX_BUFFER);
+    rtcUnmapBuffer(scene, ebMesh, RTC_INDEX_BUFFER);
+    rtcUnmapBuffer(scene, ebMesh, RTC_VERTEX_BUFFER);
 
     rtcCommit(scene);
 
-
-    // Cleanup temporary memory
-    delete vertices;
-    delete indices;
-    //delete tridata;
+    inited = true;
   }
 }
 
@@ -224,18 +207,4 @@ void Embree::computeTexCoords2(const RenderContext &, RayPacket &) const
 void Embree::computeTexCoords3(const RenderContext &, RayPacket &) const
 {
   fprintf(stderr, "computeTexCoords3()\n");
-}
-
-void Embree::initialize()
-{
-  //TODO: add initialization code
-  try
-  {
-      rtcInit();
-  }
-  catch(std::exception e)
-  {
-      fprintf(stderr, "catching init error: %s\n", e.what());
-  }
-
 }

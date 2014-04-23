@@ -53,11 +53,9 @@ namespace Manta
 
   private:
 
-    // Helper functions ///////////////////////////////////////////////////////
-
-    void initialize();
-
     // Private data members ///////////////////////////////////////////////////
+
+    bool inited;
 
     Mesh* currMesh;
   };
