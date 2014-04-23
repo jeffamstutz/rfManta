@@ -118,8 +118,9 @@ void Rayforce::intersect(const RenderContext& context, RayPacket& rays) const
     {
       Material *material = currMesh->materials[rayData.matID];
       Primitive *primitive = (Primitive*)currMesh->get(rayData.triID);
-      rays.hit(i, rayData.minT, material, primitive, this);
+      rays.hit(i, rayData.minT - T_EPSILON, material, primitive, this);
       Vector normal(rayData.normal[0], rayData.normal[1], rayData.normal[2]);
+      normal.normalize();
       rays.setNormal(i, normal);
     }
   }
