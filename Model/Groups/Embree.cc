@@ -93,7 +93,7 @@ void Embree::intersect(const RenderContext&/*context*/, RayPacket& rays) const
       uint mid = currMesh->face_material[ray.primID];
       Material *material = currMesh->materials[mid];
       Primitive *primitive = (Primitive*)currMesh->get(ray.primID);
-      rays.hit(i, ray.tfar - T_EPSILON, material, primitive, this);
+      rays.hit(i, ray.tfar, material, primitive, this);
       Vector normal(ray.Ng[0], ray.Ng[1], ray.Ng[2]);
       normal.normalize();
       rays.setNormal(i, normal);
