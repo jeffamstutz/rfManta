@@ -76,7 +76,7 @@ void Embree::intersect(const RenderContext&/*context*/, RayPacket& rays) const
     ray.dir[1] = mray.direction()[1];
     ray.dir[2] = mray.direction()[2];
 
-    ray.tnear = 0.0f;
+    ray.tnear = T_EPSILON;
     ray.tfar  = std::numeric_limits<float>::infinity();
 
     ray.geomID = -1;

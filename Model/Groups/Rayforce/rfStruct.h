@@ -32,6 +32,7 @@ extern "C"
   typedef struct
   {
     int    hit;
+    float  skipdist;
     float  minT;
     size_t triID;
     int    matID;

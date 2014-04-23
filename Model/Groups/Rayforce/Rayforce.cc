@@ -82,6 +82,10 @@ void Rayforce::intersect(const RenderContext& context, RayPacket& rays) const
   rfRaySingle ray;
   rfRaySingleInit(&ray);
 
+  //NOTE: ray.skipdist is not implemented to be used by Rayforce
+  //ray.skipdist = T_EPSILON;
+  //ray.clipdist = std::numeric_limits<float>::infinity();
+
   if(rays.getFlag(RayPacket::ConstantOrigin))
   {
     Manta::Ray mray = rays.getRay(rays.begin());
@@ -108,6 +112,8 @@ void Rayforce::intersect(const RenderContext& context, RayPacket& rays) const
     ray.vector[2] = mray.direction()[2];
 
     rfRayData rayData;
+    rayData.skipdist = T_EPSILON;
+    rayData.hit      = 0;
 
     (*traceFcn)(ray, rayData);
 
