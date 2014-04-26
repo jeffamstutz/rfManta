@@ -170,15 +170,7 @@ void Rayforce::addToUpdateGraph(ObjectUpdateGraph* /*graph*/,
 void Rayforce::computeBounds(const PreprocessContext& context, BBox& bbox) const
 {
   fprintf(stderr, "computeBounds()\n");
-#if 0
-  float box[6];
-  rfGetBoundingBoxf(scene->getRawPtr(), box);
-  Vector min(box[0], box[2], box[4]);
-  Vector max(box[1], box[3], box[5]);
-  bbox = BBox(min, max);
-#else
   currMesh->computeBounds(context, bbox);
-#endif
 }
 
 void Rayforce::preprocess(const PreprocessContext &context)
