@@ -37,7 +37,7 @@
 
 // Macros from path.h /////////////////////////////////////////////////////////
 
-#define RF_ADDRBITS 64
+#define RF_ADDRBITS 32
 
 #if RF_ADDRBITS == 16
  #define RF_SECTOR(x) ((const rfSector16 * RF_RESTRICT)x)
@@ -72,6 +72,9 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include "resolve.h"
+
+//Uncomment for debug output during ray traversal
+//#define DEBUG_OUTPUT
 
 using namespace Manta;
 
@@ -198,7 +201,7 @@ void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
 
   for(int i = rays.begin(); i < rays.end(); ++i)
   {
-    Manta::Ray ray = rays.getRay(rays.begin());
+    Manta::Ray ray = rays.getRay(i);
 
     float origin[3]; //original origin (for calculating hitdist at the end of
                      //                 triangle intersection)
@@ -232,6 +235,9 @@ void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
 
     for( ; ; )
     {
+#ifdef DEBUG_OUTPUT
+      fprintf(stderr, "traversing sector\n");
+#endif
       /* Sector traversal */
       int tricount;
 
@@ -255,6 +261,7 @@ void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
       // [/info]
 
       tricount = RF_SECTOR_GET_PRIMCOUNT(RF_SECTOR(root));
+      trihit = 0;
       if( tricount )
       {
         RF_TRILIST_TYPE *trilist;// addressing type
@@ -269,7 +276,6 @@ void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
 
         // [info]
         // Triangle intersection!
-        trihit = 0;
         trilist = RF_TRILIST( RF_SECTOR(root) );
         do
         {
@@ -304,9 +310,15 @@ void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
         axisindex = nredge >> 1;
         hitdist = (dst[axisindex] - origin[axisindex]) * vectinv[axisindex];
 
-        if( trihit && hitdist > T_EPSILON )
+#ifdef DEBUG_OUTPUT
+        fprintf(stderr, "hit triangle: %p\n", trihit);
+#endif
+
+        if(trihit && hitdist > T_EPSILON)
           break;
       }
+      //else
+      //    fprintf(stderr, "no triangles...\n");
       // [/info]
 
       // [info]
@@ -315,10 +327,18 @@ void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
       if(RF_SECTOR(root)->flags &
          ((RF_LINK_SECTOR<<RF_SECTOR_LINKFLAGS_SHIFT) << nredge))
       {
+#ifdef DEBUG_OUTPUT
+        fprintf(stderr, "neighbor is a sector\n");
+#endif
         /* Neighbor is sector */
         slink = (rfssize)RF_SECTOR(root)->link[nredge];
         if(!(slink))
+        {
+#ifdef DEBUG_OUTPUT
+          fprintf(stderr, "goto tracevoid\n");
+#endif
           break;//CHECKME:-->may be incorrect? was 'goto tracevoid;'
+        }
         root = RF_ADDRESS(root, slink << RF_LINKSHIFT);
         continue;
       }
@@ -338,6 +358,9 @@ void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
       /* Node traversal */
       for( ; ; )
       {
+#ifdef DEBUG_OUTPUT
+        fprintf(stderr, "node traversal\n");
+#endif
 
         int linkflags;
         linkflags = RF_NODE(root)->flags;//--> pull out the current traversal
