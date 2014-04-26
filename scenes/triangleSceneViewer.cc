@@ -21,7 +21,7 @@
 #include <Model/Groups/KDTree.h>
 #include <Model/Groups/ObjGroup.h>
 #include <Model/Groups/RecursiveGrid.h>
-#include <Model/Groups/RFGraph.h>
+#include <Model/Groups/RFGraph/RFGraph.h>
 #include <Model/Groups/Embree.h>
 #include <Model/Groups/Rayforce/Rayforce.h>
 #include <Model/Materials/Dielectric.h>

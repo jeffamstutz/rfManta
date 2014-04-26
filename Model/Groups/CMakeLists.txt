@@ -16,7 +16,6 @@ SET (Manta_Groups_SRCS
      Groups/ObjGroup.h
      Groups/ObjGroup.cc
      Groups/RecursiveGrid
-     Groups/RFGraph
      Groups/TreeTraversalProbability.cc
      Groups/BSP/BSP
      Groups/BSP/BSH
@@ -27,6 +26,7 @@ SET (Manta_Groups_SRCS
      Groups/Rayforce/Rayforce
      Groups/Rayforce/rfPipeline.c
      Groups/Rayforce/rfStruct.h
+     Groups/RFGraph/RFGraph
 )
 
 set_source_files_properties(Groups/Rayforce/rfPipeline.c

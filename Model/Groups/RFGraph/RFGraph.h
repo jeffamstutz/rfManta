@@ -19,6 +19,7 @@ namespace rfut
 namespace Manta
 {
   class Mesh;
+  class Ray;
 
   class RFGraph : public AccelerationStructure,
                   public TexCoordMapper
@@ -86,6 +87,8 @@ namespace Manta
     rfut::Model*                    model;
     rfut::Scene<Target::System>*    scene;
     rfut::Device<Target::System>*   device;
+
+    rfHandle *handle;
 
     std::string saveToFileName;
 
