@@ -37,6 +37,8 @@
 
 // Macros from path.h /////////////////////////////////////////////////////////
 
+#define RF_ADDRBITS 64
+
 #if RF_ADDRBITS == 16
  #define RF_SECTOR(x) ((const rfSector16 * RF_RESTRICT)x)
  #define RF_NODE(x) ((const rfNode16 * RF_RESTRICT)x)
@@ -68,6 +70,8 @@
   }
 
 ///////////////////////////////////////////////////////////////////////////////
+
+#include "resolve.h"
 
 using namespace Manta;
 
@@ -190,13 +194,14 @@ bool RFGraph::saveToFile(const string &fileName)
 
 void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
 {
-  fprintf(stderr, "intersect()\n");
+  //fprintf(stderr, "intersect()\n");
 
   for(int i = rays.begin(); i < rays.end(); ++i)
   {
     Manta::Ray ray = rays.getRay(rays.begin());
 
-    float origin[3]; //original origin (for calculating hitdist at the end)
+    float origin[3]; //original origin (for calculating hitdist at the end of
+                     //                 triangle intersection)
 
     // Begin code imported from path.h //
 
@@ -215,12 +220,11 @@ void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
     vector[1] = ray.direction()[1];
     vector[2] = ray.direction()[2];
 
-    //XXX: need to figure out how to resolve the origin...
-    //root = RF_RESOLVENAME( handle->objectgraph, ray->origin );
-
     origin[0] = src[0] = ray.origin()[0];
     origin[1] = src[1] = ray.origin()[1];
     origin[2] = src[2] = ray.origin()[2];
+
+    root = resolve(handle->objectgraph, origin);
 
     RF_ELEM_PREPARE_AXIS(0);
     RF_ELEM_PREPARE_AXIS(1);
@@ -366,14 +370,18 @@ void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
 
     // We have a triangle intersection, go ahead and populate the ray in the
     // RayPacket accordingly
-    rfTriangleData* data = (rfTriangleData*)(RF_ADDRESS(trihit, sizeof(rfTri)));
+    if(trihit)
+    {
+      rfTriangleData* data =
+              (rfTriangleData*)(RF_ADDRESS(trihit, sizeof(rfTri)));
 
-    Material *material   = currMesh->materials[data->matID];
-    Primitive *primitive = (Primitive*)currMesh->get(data->triID);
-    rays.hit(i, hitdist, material, primitive, this);
-    Vector normal(trihit->plane[0], trihit->plane[1], trihit->plane[2]);
-    normal.normalize();
-    rays.setNormal(i, normal);
+      Material *material   = currMesh->materials[data->matID];
+      Primitive *primitive = (Primitive*)currMesh->get(data->triID);
+      rays.hit(i, hitdist, material, primitive, this);
+      Vector normal(trihit->plane[0], trihit->plane[1], trihit->plane[2]);
+      normal.normalize();
+      rays.setNormal(i, normal);
+    }
   }
 
   rays.setFlag(RayPacket::HaveNormals);
@@ -468,6 +476,8 @@ void RFGraph::preprocess(const PreprocessContext &context)
 
     object->attach(*model);
     scene->acquire();
+
+    handle = scene->m_handle;
 
     // Cleanup temporary memory
     delete vertices;
