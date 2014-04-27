@@ -419,7 +419,7 @@ void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
 
       Material *material   = currMesh->materials[data->matID];
       Primitive *primitive = (Primitive*)currMesh->get(data->triID);
-      rays.hit(i, hitdist, material, primitive, this);
+      rays.hit(i, hitdist - T_EPSILON, material, primitive, this);
       Vector normal(trihit->plane[0], trihit->plane[1], trihit->plane[2]);
       normal.normalize();
       rays.setNormal(i, normal);
