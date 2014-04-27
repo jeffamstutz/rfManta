@@ -199,35 +199,54 @@ void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
 {
   //fprintf(stderr, "intersect()\n");
 
+  int nredge;
+  rfssize slink;
+  rff vector[3];
+  rff RF_ALIGN16 vectinv[4];
+  int edgeindex[3];
+  rff src[3], dst[3], dist, mindist;
+  rff hitdist;
+  void *root, *rayroot;// rayroot --> Keep the original root address for the ray
+                       //             because 'root' will not be the same for
+                       //             each iteration of the outer ray loop
+  rfTri *trihit;
+  int axisindex;
+
+  float origin[3]; //original origin (for calculating hitdist at the end of
+                   //                 triangle intersection)
+
+  if(rays.getFlag(RayPacket::ConstantOrigin))
+  {
+    Manta::Ray ray = rays.getRay(rays.begin());
+    origin[0] = ray.origin()[0];
+    origin[1] = ray.origin()[1];
+    origin[2] = ray.origin()[2];
+    rayroot = resolve(handle->objectgraph, origin);
+  }
+
   for(int i = rays.begin(); i < rays.end(); ++i)
   {
     Manta::Ray ray = rays.getRay(i);
-
-    float origin[3]; //original origin (for calculating hitdist at the end of
-                     //                 triangle intersection)
-
-    // Begin code imported from path.h //
-
-    int nredge;
-    rfssize slink;
-    rff vector[3];
-    rff RF_ALIGN16 vectinv[4];
-    int edgeindex[3];
-    rff src[3], dst[3], dist, mindist;
-    rff hitdist;
-    void *root;
-    rfTri *trihit;
-    int axisindex;
 
     vector[0] = ray.direction()[0];
     vector[1] = ray.direction()[1];
     vector[2] = ray.direction()[2];
 
-    origin[0] = src[0] = ray.origin()[0];
-    origin[1] = src[1] = ray.origin()[1];
-    origin[2] = src[2] = ray.origin()[2];
+    if(!rays.getFlag(RayPacket::ConstantOrigin))
+    {
+      origin[0] = ray.origin()[0];
+      origin[1] = ray.origin()[1];
+      origin[2] = ray.origin()[2];
+      rayroot = resolve(handle->objectgraph, origin);
+    }
 
-    root = resolve(handle->objectgraph, origin);
+    // Reset the root for the ray (may have changed if
+    // RayPacket::ConstantOrigin is 'true')
+    root = rayroot;
+
+    src[0] = origin[0];
+    src[1] = origin[1];
+    src[2] = origin[2];
 
     RF_ELEM_PREPARE_AXIS(0);
     RF_ELEM_PREPARE_AXIS(1);
