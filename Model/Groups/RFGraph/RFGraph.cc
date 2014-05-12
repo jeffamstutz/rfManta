@@ -87,7 +87,7 @@ typedef struct
 
 
 RFGraph::RFGraph() :
-  //graph(0)
+  graph(0),
   context(0),
   object(0),
   model(0),
@@ -103,18 +103,16 @@ RFGraph::RFGraph() :
 RFGraph::~RFGraph()
 {
   // Free the graph if it exists
-#if 0
   if(graph)
     free(graph);
-#else
+
   cleanup();
-#endif
 }
 
 bool RFGraph::buildFromFile(const std::string &fileName)
 {
   fprintf(stderr, "buildFromFile()\n");
-#if 0
+
   /////////////////////////////////////////////////////////////////////////////
   // Code imported from Rayforce //////////////////////////////////////////////
   /////////////////////////////////////////////////////////////////////////////
@@ -170,17 +168,6 @@ bool RFGraph::buildFromFile(const std::string &fileName)
   free( cache );
   fclose( file );
 #endif
-#else
-  initialize();
-
-  model = new rfut::Model(*scene, ModelType::Triangles, 255, 255);
-  model->setData(fileName);
-
-  object->attach(*model);
-  scene->acquire();
-
-  handle = scene->m_handle;
-#endif
 
   // Finished loading the graph cache, return success
   return true;
@@ -221,7 +208,7 @@ void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
     origin[0] = ray.origin()[0];
     origin[1] = ray.origin()[1];
     origin[2] = ray.origin()[2];
-    rayroot = resolve(handle->objectgraph, origin);
+    rayroot = resolve(graph, origin);
   }
 
   for(int i = rays.begin(); i < rays.end(); ++i)
@@ -237,7 +224,7 @@ void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
       origin[0] = ray.origin()[0];
       origin[1] = ray.origin()[1];
       origin[2] = ray.origin()[2];
-      rayroot = resolve(handle->objectgraph, origin);
+      rayroot = resolve(graph, origin);
     }
 
     // Reset the root for the ray (may have changed if
@@ -336,8 +323,10 @@ void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
         if(trihit && hitdist > T_EPSILON)
           break;
       }
-      //else
-      //    fprintf(stderr, "no triangles...\n");
+#ifdef DEBUG_OUTPUT
+      else
+          fprintf(stderr, "no triangles...\n");
+#endif
       // [/info]
 
       // [info]
@@ -480,7 +469,7 @@ void RFGraph::preprocess(const PreprocessContext &context)
   Mesh *mesh = currMesh;
 
   // Check to see if we haven't loaded a graph cache
-  if(mesh && !model)
+  if(mesh && !graph)
   {
     // Re-initialize rfut objects
     initialize();
@@ -529,6 +518,8 @@ void RFGraph::preprocess(const PreprocessContext &context)
     // Save the cache file out if we got a filename from saveToFile()
     if(!saveToFileName.empty())
       model->saveCacheFile(saveToFileName);
+
+    graph = handle->objectgraph;
   }
 }
 

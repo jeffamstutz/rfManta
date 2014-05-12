@@ -79,7 +79,7 @@ namespace Manta
 
     // Private data members ///////////////////////////////////////////////////
 
-    //void *graph;
+    void *graph;
 
     // Rayforce related data
     rfut::Context*                  context;
