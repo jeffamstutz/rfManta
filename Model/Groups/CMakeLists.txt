@@ -27,6 +27,9 @@ SET (Manta_Groups_SRCS
      Groups/Rayforce/rfPipeline.c
      Groups/Rayforce/rfStruct.h
      Groups/RFGraph/RFGraph
+     Groups/RFGraph/rfdefs.h
+     Groups/RFGraph/rfgraph.h
+     Groups/RFGraph/rfmath.h
 )
 
 set_source_files_properties(Groups/Rayforce/rfPipeline.c

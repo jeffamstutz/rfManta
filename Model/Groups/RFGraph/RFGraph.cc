@@ -186,21 +186,8 @@ void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
 {
   //fprintf(stderr, "intersect()\n");
 
-  int nredge;
-  rfssize slink;
-  rff vector[3];
-  rff RF_ALIGN16 vectinv[4];
-  int edgeindex[3];
-  rff src[3], dst[3], dist, mindist;
-  rff hitdist;
-  void *root, *rayroot;// rayroot --> Keep the original root address for the ray
-                       //             because 'root' will not be the same for
-                       //             each iteration of the outer ray loop
-  rfTri *trihit;
-  int axisindex;
-
-  float origin[3]; //original origin (for calculating hitdist at the end of
-                   //                 triangle intersection)
+  void *root = 0;
+  float origin[3];
 
   if(rays.getFlag(RayPacket::ConstantOrigin))
   {
@@ -208,211 +195,21 @@ void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
     origin[0] = ray.origin()[0];
     origin[1] = ray.origin()[1];
     origin[2] = ray.origin()[2];
-    rayroot = resolve(graph, origin);
+    root = resolve(graph, origin);
   }
 
   for(int i = rays.begin(); i < rays.end(); ++i)
   {
     Manta::Ray ray = rays.getRay(i);
-
-    vector[0] = ray.direction()[0];
-    vector[1] = ray.direction()[1];
-    vector[2] = ray.direction()[2];
-
     if(!rays.getFlag(RayPacket::ConstantOrigin))
     {
       origin[0] = ray.origin()[0];
       origin[1] = ray.origin()[1];
       origin[2] = ray.origin()[2];
-      rayroot = resolve(graph, origin);
+      root = resolve(graph, origin);
     }
 
-    // Reset the root for the ray (may have changed if
-    // RayPacket::ConstantOrigin is 'true')
-    root = rayroot;
-
-    src[0] = origin[0];
-    src[1] = origin[1];
-    src[2] = origin[2];
-
-    RF_ELEM_PREPARE_AXIS(0);
-    RF_ELEM_PREPARE_AXIS(1);
-    RF_ELEM_PREPARE_AXIS(2);
-
-    for( ; ; )
-    {
-#ifdef DEBUG_OUTPUT
-      fprintf(stderr, "traversing sector\n");
-#endif
-      /* Sector traversal */
-      int tricount;
-
-      // [info]
-      // Ray box intersection to determine endpoint of the line segment to
-      // intersect with triangles. (faster than raw ray intersection, we think)
-      nredge = edgeindex[0];
-      mindist = (RF_SECTOR(root)->edge[edgeindex[0]] - src[0]) * vectinv[0];
-      dist = (RF_SECTOR(root)->edge[edgeindex[1]] - src[1]) * vectinv[1];
-      if( dist < mindist )
-      {
-        nredge = edgeindex[1];
-        mindist = dist;
-      }
-      dist = (RF_SECTOR(root)->edge[edgeindex[2]] - src[2]) * vectinv[2];
-      if( dist < mindist )
-      {
-        nredge = edgeindex[2];
-        mindist = dist;
-      }
-      // [/info]
-
-      tricount = RF_SECTOR_GET_PRIMCOUNT(RF_SECTOR(root));
-      trihit = 0;
-      if( tricount )
-      {
-        RF_TRILIST_TYPE *trilist;// addressing type
-
-        // [info]
-        // Calculating the endpoint using the entry (resolved origin)
-        // and ray info
-        dst[0] = src[0] + ( mindist * vector[0] );
-        dst[1] = src[1] + ( mindist * vector[1] );
-        dst[2] = src[2] + ( mindist * vector[2] );
-        // [/info]
-
-        // [info]
-        // Triangle intersection!
-        trilist = RF_TRILIST( RF_SECTOR(root) );
-        do
-        {
-          rff dstdist, srcdist, uv[2], f, vray[3];
-          rfTri *tri;
-
-          tri = (rfTri *)RF_ADDRESS(root,
-                                    (rfssize)(*trilist++) << RF_LINKSHIFT);
-
-          // Intersect the triangle, with no back/front face culling
-          dstdist = rfMathPlanePoint( tri->plane, dst );
-          srcdist = rfMathPlanePoint( tri->plane, src );
-          if( dstdist * srcdist > (rff)0.0 )
-            continue;
-          f = srcdist / ( srcdist - dstdist );
-          vray[0] = src[0] + f * ( dst[0] - src[0] );
-          vray[1] = src[1] + f * ( dst[1] - src[1] );
-          vray[2] = src[2] + f * ( dst[2] - src[2] );
-          uv[0] = ( rfMathVectorDotProduct( &tri->edpu[0], vray ) + tri->edpu[3] );
-          if( !( uv[0] >= (rff)0.0 ) || ( uv[0] > (rff)1.0 ) )
-            continue;
-          uv[1] = ( rfMathVectorDotProduct( &tri->edpv[0], vray ) + tri->edpv[3] );
-          if( ( uv[1] < (rff)0.0 ) || ( ( uv[0] + uv[1] ) > (rff)1.0 ) )
-            continue;
-          dst[0] = vray[0];
-          dst[1] = vray[1];
-          dst[2] = vray[2];
-
-          trihit = tri;
-        } while( --tricount );
-
-        axisindex = nredge >> 1;
-        hitdist = (dst[axisindex] - origin[axisindex]) * vectinv[axisindex];
-
-#ifdef DEBUG_OUTPUT
-        fprintf(stderr, "hit triangle: %p\n", trihit);
-#endif
-
-        if(trihit && hitdist > T_EPSILON)
-          break;
-      }
-#ifdef DEBUG_OUTPUT
-      else
-          fprintf(stderr, "no triangles...\n");
-#endif
-      // [/info]
-
-      // [info]
-      // If the neiboring node is a sector, just go straight to it and move on
-      /* Traverse through the sector's edge */
-      if(RF_SECTOR(root)->flags &
-         ((RF_LINK_SECTOR<<RF_SECTOR_LINKFLAGS_SHIFT) << nredge))
-      {
-#ifdef DEBUG_OUTPUT
-        fprintf(stderr, "neighbor is a sector\n");
-#endif
-        /* Neighbor is sector */
-        slink = (rfssize)RF_SECTOR(root)->link[nredge];
-        if(!(slink))
-        {
-#ifdef DEBUG_OUTPUT
-          fprintf(stderr, "goto tracevoid\n");
-#endif
-          break;//CHECKME:-->may be incorrect? was 'goto tracevoid;'
-        }
-        root = RF_ADDRESS(root, slink << RF_LINKSHIFT);
-        continue;
-      }
-      // [/info]
-
-      // [info]
-      // We have to do some kind of disambiguation of the neighbors to figure
-      // out what sector we need to traverse to next.
-      /* Neighbor is node */
-      src[0] += mindist * vector[0];
-      src[1] += mindist * vector[1];
-      src[2] += mindist * vector[2];
-      root = RF_ADDRESS(root,
-                        (rfssize)RF_SECTOR(root)->link[nredge] << RF_LINKSHIFT);
-      // [/info]
-
-      /* Node traversal */
-      for( ; ; )
-      {
-#ifdef DEBUG_OUTPUT
-        fprintf(stderr, "node traversal\n");
-#endif
-
-        int linkflags;
-        linkflags = RF_NODE(root)->flags;//--> pull out the current traversal
-                                         //    node
-                                         //...links to other nodes or a sector
-        // [info]
-        // Figure out which half-space we are traversing through the
-        // diambiguation plane.
-        if( src[RF_NODE_GET_AXIS(linkflags)] < RF_NODE(root)->plane )
-        {
-          root = RF_ADDRESS(root,
-                            (rfssize)RF_NODE(root)
-                            ->link[RF_NODE_LESS] << RF_LINKSHIFT);
-          if( linkflags & ((RF_LINK_SECTOR<<RF_NODE_LINKFLAGS_SHIFT)
-                           << RF_NODE_LESS))
-            break;
-        }
-        else
-        {
-          root = RF_ADDRESS(root,
-                            (rfssize)RF_NODE(root)->link[RF_NODE_MORE]
-                            << RF_LINKSHIFT);
-          if( linkflags & ((RF_LINK_SECTOR<<RF_NODE_LINKFLAGS_SHIFT)
-                           << RF_NODE_MORE))
-            break;
-        }
-        // [/info]
-      }
-    }
-
-    // We have a triangle intersection, go ahead and populate the ray in the
-    // RayPacket accordingly
-    if(trihit)
-    {
-      rfTriangleData* data =
-              (rfTriangleData*)(RF_ADDRESS(trihit, sizeof(rfTri)));
-
-      Material *material   = currMesh->materials[data->matID];
-      Primitive *primitive = (Primitive*)currMesh->get(data->triID);
-      rays.hit(i, hitdist - T_EPSILON, material, primitive, this);
-      Vector normal(trihit->plane[0], trihit->plane[1], trihit->plane[2]);
-      normal.normalize();
-      rays.setNormal(i, normal);
-    }
+    intersectSingle(rays, i, root);
   }
 
   rays.setFlag(RayPacket::HaveNormals);
@@ -541,6 +338,215 @@ void RFGraph::initialize()
   device  = new rfut::Device<Target::System>(*context, 0);
   scene   = new rfut::Scene<Target::System>(*context, *device);
   object  = new rfut::Object(*scene, CullMode::None);
+}
+
+void RFGraph::intersectSingle(RayPacket &rays, int which, void *root) const
+{
+  int nredge;
+  rfssize slink;
+  rff vector[3];
+  rff RF_ALIGN16 vectinv[4];
+  int edgeindex[3];
+  rff src[3], dst[3], dist, mindist;
+  rff hitdist = 0.f;
+  rfTri *trihit;
+  int axisindex;
+
+  float origin[3]; //original origin (for calculating hitdist at the end of
+                   //                 triangle intersection)
+
+  Manta::Ray ray = rays.getRay(which);
+
+  vector[0] = ray.direction()[0];
+  vector[1] = ray.direction()[1];
+  vector[2] = ray.direction()[2];
+
+  origin[0] = ray.origin()[0];
+  origin[1] = ray.origin()[1];
+  origin[2] = ray.origin()[2];
+
+  src[0] = origin[0];
+  src[1] = origin[1];
+  src[2] = origin[2];
+
+  RF_ELEM_PREPARE_AXIS(0);
+  RF_ELEM_PREPARE_AXIS(1);
+  RF_ELEM_PREPARE_AXIS(2);
+
+  for( ; ; )
+  {
+#ifdef DEBUG_OUTPUT
+      fprintf(stderr, "traversing sector\n");
+#endif
+    /* Sector traversal */
+    int tricount;
+
+    // [info]
+    // Ray box intersection to determine endpoint of the line segment to
+    // intersect with triangles. (faster than raw ray intersection, we think)
+    nredge = edgeindex[0];
+    mindist = (RF_SECTOR(root)->edge[edgeindex[0]] - src[0]) * vectinv[0];
+    dist = (RF_SECTOR(root)->edge[edgeindex[1]] - src[1]) * vectinv[1];
+    if( dist < mindist )
+    {
+      nredge = edgeindex[1];
+      mindist = dist;
+    }
+    dist = (RF_SECTOR(root)->edge[edgeindex[2]] - src[2]) * vectinv[2];
+    if( dist < mindist )
+    {
+      nredge = edgeindex[2];
+      mindist = dist;
+    }
+    // [/info]
+
+    tricount = RF_SECTOR_GET_PRIMCOUNT(RF_SECTOR(root));
+    trihit = 0;
+    if( tricount )
+    {
+      RF_TRILIST_TYPE *trilist;// addressing type
+
+      // [info]
+      // Calculating the endpoint using the entry (resolved origin)
+      // and ray info
+      dst[0] = src[0] + ( mindist * vector[0] );
+      dst[1] = src[1] + ( mindist * vector[1] );
+      dst[2] = src[2] + ( mindist * vector[2] );
+      // [/info]
+
+      // [info]
+      // Triangle intersection!
+      trilist = RF_TRILIST( RF_SECTOR(root) );
+      do
+      {
+        rff dstdist, srcdist, uv[2], f, vray[3];
+        rfTri *tri;
+
+        tri = (rfTri *)RF_ADDRESS(root,
+                                  (rfssize)(*trilist++) << RF_LINKSHIFT);
+
+        // Intersect the triangle, with no back/front face culling
+        dstdist = rfMathPlanePoint( tri->plane, dst );
+        srcdist = rfMathPlanePoint( tri->plane, src );
+        if( dstdist * srcdist > (rff)0.0 )
+          continue;
+        f = srcdist / ( srcdist - dstdist );
+        vray[0] = src[0] + f * ( dst[0] - src[0] );
+        vray[1] = src[1] + f * ( dst[1] - src[1] );
+        vray[2] = src[2] + f * ( dst[2] - src[2] );
+        uv[0] = ( rfMathVectorDotProduct( &tri->edpu[0], vray ) + tri->edpu[3] );
+        if( !( uv[0] >= (rff)0.0 ) || ( uv[0] > (rff)1.0 ) )
+          continue;
+        uv[1] = ( rfMathVectorDotProduct( &tri->edpv[0], vray ) + tri->edpv[3] );
+        if( ( uv[1] < (rff)0.0 ) || ( ( uv[0] + uv[1] ) > (rff)1.0 ) )
+          continue;
+        dst[0] = vray[0];
+        dst[1] = vray[1];
+        dst[2] = vray[2];
+
+        trihit = tri;
+      } while( --tricount );
+
+      axisindex = nredge >> 1;
+      hitdist = (dst[axisindex] - origin[axisindex]) * vectinv[axisindex];
+
+#ifdef DEBUG_OUTPUT
+        fprintf(stderr, "hit triangle: %p\n", trihit);
+#endif
+
+      if(trihit && hitdist > T_EPSILON)
+        break;
+    }
+#ifdef DEBUG_OUTPUT
+      else
+          fprintf(stderr, "no triangles...\n");
+#endif
+    // [/info]
+
+    // [info]
+    // If the neiboring node is a sector, just go straight to it and move on
+    /* Traverse through the sector's edge */
+    if(RF_SECTOR(root)->flags &
+       ((RF_LINK_SECTOR<<RF_SECTOR_LINKFLAGS_SHIFT) << nredge))
+    {
+#ifdef DEBUG_OUTPUT
+        fprintf(stderr, "neighbor is a sector\n");
+#endif
+      /* Neighbor is sector */
+      slink = (rfssize)RF_SECTOR(root)->link[nredge];
+      if(!(slink))
+      {
+#ifdef DEBUG_OUTPUT
+          fprintf(stderr, "goto tracevoid\n");
+#endif
+        break;//CHECKME:-->may be incorrect? was 'goto tracevoid;'
+      }
+      root = RF_ADDRESS(root, slink << RF_LINKSHIFT);
+      continue;
+    }
+    // [/info]
+
+    // [info]
+    // We have to do some kind of disambiguation of the neighbors to figure
+    // out what sector we need to traverse to next.
+    /* Neighbor is node */
+    src[0] += mindist * vector[0];
+    src[1] += mindist * vector[1];
+    src[2] += mindist * vector[2];
+    root = RF_ADDRESS(root,
+                      (rfssize)RF_SECTOR(root)->link[nredge] << RF_LINKSHIFT);
+    // [/info]
+
+    /* Node traversal */
+    for( ; ; )
+    {
+#ifdef DEBUG_OUTPUT
+        fprintf(stderr, "node traversal\n");
+#endif
+
+      int linkflags;
+      linkflags = RF_NODE(root)->flags;//--> pull out the current traversal
+                                       //    node
+                                       //...links to other nodes or a sector
+      // [info]
+      // Figure out which half-space we are traversing through the
+      // diambiguation plane.
+      if( src[RF_NODE_GET_AXIS(linkflags)] < RF_NODE(root)->plane )
+      {
+        root = RF_ADDRESS(root,
+                          (rfssize)RF_NODE(root)
+                          ->link[RF_NODE_LESS] << RF_LINKSHIFT);
+        if( linkflags & ((RF_LINK_SECTOR<<RF_NODE_LINKFLAGS_SHIFT)
+                         << RF_NODE_LESS))
+          break;
+      }
+      else
+      {
+        root = RF_ADDRESS(root,
+                          (rfssize)RF_NODE(root)->link[RF_NODE_MORE]
+                          << RF_LINKSHIFT);
+        if( linkflags & ((RF_LINK_SECTOR<<RF_NODE_LINKFLAGS_SHIFT)
+                         << RF_NODE_MORE))
+          break;
+      }
+      // [/info]
+    }
+  }
+
+  // We have a triangle intersection, go ahead and populate the ray in the
+  // RayPacket accordingly
+  if(trihit)
+  {
+    rfTriangleData* data =
+            (rfTriangleData*)(RF_ADDRESS(trihit, sizeof(rfTri)));
+
+    Material *material   = currMesh->materials[data->matID];
+    Primitive *primitive = (Primitive*)currMesh->get(data->triID);
+    rays.hit(which, hitdist - T_EPSILON, material, primitive, this);
+    Vector normal(trihit->plane[0], trihit->plane[1], trihit->plane[2]);
+    normal.normalize();
+    rays.setNormal(which, normal);
+  }
 }
 
 void RFGraph::cleanup()

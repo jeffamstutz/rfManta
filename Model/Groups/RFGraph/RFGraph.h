@@ -75,6 +75,8 @@ namespace Manta
 
     void initialize();
 
+    inline void intersectSingle(RayPacket& rays, int which, void *root) const;
+
     void cleanup();
 
     // Private data members ///////////////////////////////////////////////////
