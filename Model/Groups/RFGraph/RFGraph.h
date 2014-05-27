@@ -75,7 +75,8 @@ namespace Manta
 
     void initialize();
 
-    inline void intersectSingle(RayPacket& rays, int which, void *root) const;
+    void intersectSingle(RayPacket& rays, int which, void *root) const;
+    void intersectSSE(RayPacket& rays, void *roots[4]) const;
 
     void cleanup();
 

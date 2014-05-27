@@ -76,6 +76,13 @@
 //Uncomment for debug output during ray traversal
 //#define DEBUG_OUTPUT
 
+//Uncomment to force tracing with scalar ray traversal
+//#define TRAVERSE_SINGLE_RAY
+
+
+#define RF_PACKETOFFSET (0)
+#define RF_PACKETWIDTH  (4)
+
 using namespace Manta;
 
 // Per-triangle data
@@ -184,33 +191,115 @@ bool RFGraph::saveToFile(const string &fileName)
 
 void RFGraph::intersect(const RenderContext& /*context*/, RayPacket& rays) const
 {
-  //fprintf(stderr, "intersect()\n");
-
-  void *root = 0;
+  void *roots[4];
   float origin[3];
 
-  if(rays.getFlag(RayPacket::ConstantOrigin))
+  bool cOrigin = rays.getFlag(RayPacket::ConstantOrigin);
+
+  const int raybegin = rays.begin();
+  const int rayend   = rays.end();
+
+  if (cOrigin)
   {
-    Manta::Ray ray = rays.getRay(rays.begin());
+    Manta::Ray ray = rays.getRay(raybegin);
     origin[0] = ray.origin()[0];
     origin[1] = ray.origin()[1];
     origin[2] = ray.origin()[2];
-    root = resolve(graph, origin);
+    roots[0] = roots[1] = roots[2] = roots[3] = resolve(graph, origin);
   }
 
-  for(int i = rays.begin(); i < rays.end(); ++i)
+#ifdef TRAVERSE_SINGLE_RAY
+  for (int i = raybegin; i < rayend; ++i)
   {
-    Manta::Ray ray = rays.getRay(i);
-    if(!rays.getFlag(RayPacket::ConstantOrigin))
+    if (!cOrigin)
     {
+      Manta::Ray ray = rays.getRay(i);
       origin[0] = ray.origin()[0];
       origin[1] = ray.origin()[1];
       origin[2] = ray.origin()[2];
-      root = resolve(graph, origin);
+      roots[0] = resolve(graph, origin);
     }
 
-    intersectSingle(rays, i, root);
+    intersectSingle(rays, i, roots[0]);
   }
+#else
+  // Do we have less than 4 rays to be traced?
+  if (rayend - (raybegin-1) < 4)
+  {
+    // Yes, so trace them all as single rays
+    for (int i = raybegin; i < rayend; ++i)
+    {
+      if (!cOrigin)
+      {
+        Manta::Ray ray = rays.getRay(i);
+        origin[0] = ray.origin()[0];
+        origin[1] = ray.origin()[1];
+        origin[2] = ray.origin()[2];
+        roots[0] = resolve(graph, origin);
+      }
+
+      intersectSingle(rays, i, roots[0]);
+    }
+  }
+  else
+  {
+    // We have more than 4 rays, create sets of packets and trace them
+
+    int i = raybegin;
+    const int sse_begin = (i + 3) & (~3);
+
+    // Trace any rays that are before the first SSE aligned ray
+    while (i < sse_begin)
+    {
+      if (!cOrigin)
+      {
+        Manta::Ray ray = rays.getRay(i);
+        origin[0] = ray.origin()[0];
+        origin[1] = ray.origin()[1];
+        origin[2] = ray.origin()[2];
+        roots[0] = resolve(graph, origin);
+      }
+
+      intersectSingle(rays, i, roots[0]);
+      ++i;
+    }
+
+    // Start with the first SSE aligned ray and trace packets
+    for (; i+4 < rayend; i += 4)
+    {
+      if (!cOrigin)
+      {
+        for (int j = 0; j < 4; ++j)
+        {
+          Manta::Ray ray = rays.getRay(i);
+          origin[0] = ray.origin()[0];
+          origin[1] = ray.origin()[1];
+          origin[2] = ray.origin()[2];
+          roots[j] = resolve(graph, origin);
+        }
+      }
+
+      RayPacket subpacket(rays, i, i+4);
+      intersectSSE(subpacket, roots);
+    }
+
+    // Trace any lingering rays at the end of the parent packet
+    while (i < rayend)
+    {
+      if (!cOrigin)
+      {
+        Manta::Ray ray = rays.getRay(i);
+        origin[0] = ray.origin()[0];
+        origin[1] = ray.origin()[1];
+        origin[2] = ray.origin()[2];
+        roots[0] = resolve(graph, origin);
+      }
+
+      intersectSingle(rays, i, roots[0]);
+      ++i;
+    }
+  }
+#endif // TRAVERSE_SINGLE_RAY
 
   rays.setFlag(RayPacket::HaveNormals);
 }
@@ -365,9 +454,12 @@ void RFGraph::intersectSingle(RayPacket &rays, int which, void *root) const
   origin[1] = ray.origin()[1];
   origin[2] = ray.origin()[2];
 
-  src[0] = origin[0];
-  src[1] = origin[1];
-  src[2] = origin[2];
+  root = resolve(graph, origin);
+
+  // Offset src by T_EPSILON to avoid self-shading
+  src[0] = origin[0] + vector[0] * T_EPSILON;
+  src[1] = origin[1] + vector[1] * T_EPSILON;
+  src[2] = origin[2] + vector[2] * T_EPSILON;
 
   RF_ELEM_PREPARE_AXIS(0);
   RF_ELEM_PREPARE_AXIS(1);
@@ -454,8 +546,7 @@ void RFGraph::intersectSingle(RayPacket &rays, int which, void *root) const
         fprintf(stderr, "hit triangle: %p\n", trihit);
 #endif
 
-      if(trihit && hitdist > T_EPSILON)
-        break;
+      if(trihit) break;
     }
 #ifdef DEBUG_OUTPUT
       else
@@ -547,6 +638,670 @@ void RFGraph::intersectSingle(RayPacket &rays, int which, void *root) const
     normal.normalize();
     rays.setNormal(which, normal);
   }
+}
+
+void RFGraph::intersectSSE(RayPacket& rays, void *roots[4]) const
+{
+  int32_t nredge;
+  int32_t donemask;
+  rfssize slink;
+  int32_t raymask, raymaskinv, vecflag;
+  __m128 vsrc[3], vdst[3];
+  __m128 vunit;
+  __m128 vector[3];
+  __m128 vectinv[3];
+  __m128 dstdist, srcdist, vsum;
+  __m128 vray[3], utd, vtd;
+  __m128 pl0, pl1, pl2, pl3;
+#if RF_CPUSLOW_SHR
+  static const int32_t maskcount[16] = { 0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4 };
+#endif
+  int32_t edgeindex[4];
+  int32_t edgevmask[3];
+  void *root;
+  int32_t axisindex;
+  __m128 vhitdist;
+ #define F 0x0
+ #define T 0xffffffff
+  static const uint32_t ortable[16*4] RF_ALIGN16 =
+  {
+    F,F,F,F,
+    T,F,F,F,
+    F,T,F,F,
+    T,T,F,F,
+    F,F,T,F,
+    T,F,T,F,
+    F,T,T,F,
+    T,T,T,F,
+    F,F,F,T,
+    T,F,F,T,
+    F,T,F,T,
+    T,T,F,T,
+    F,F,T,T,
+    T,F,T,T,
+    F,T,T,T,
+    T,T,T,T,
+  };
+ #undef F
+ #undef T
+
+  rfResult4 result;
+ #define RF_RESULT (&result)
+  void *incoherentroot[4];
+
+  const int ray0 = rays.rayBegin + 0;
+  const int ray1 = rays.rayBegin + 1;
+  const int ray2 = rays.rayBegin + 2;
+  const int ray3 = rays.rayBegin + 3;
+
+  raymask = 0x0;// = ( packet->raymask >> RF_PACKETOFFSET ) & 0xf;
+
+  if (!rays.rayIsMasked(0))
+    raymask |= 0x1;
+  if (!rays.rayIsMasked(1))
+    raymask |= 0x2;
+  if (!rays.rayIsMasked(2))
+    raymask |= 0x4;
+  if (!rays.rayIsMasked(3))
+    raymask |= 0x8;
+
+  donemask = 0x0;
+
+  vunit = _mm_set1_ps( 1.0 );
+
+#if 1
+  vsrc[0] = _mm_load_ps(&rays.getOrigin(rays.rayBegin, 0));
+  vsrc[1] = _mm_load_ps(&rays.getOrigin(rays.rayBegin, 1));
+  vsrc[2] = _mm_load_ps(&rays.getOrigin(rays.rayBegin, 2));
+
+  vector[0] = _mm_load_ps(&rays.getDirection(rays.rayBegin, 0));
+  vector[1] = _mm_load_ps(&rays.getDirection(rays.rayBegin, 1));
+  vector[2] = _mm_load_ps(&rays.getDirection(rays.rayBegin, 2));
+
+  __m128 vepsilon = _mm_set1_ps(T_EPSILON);
+
+  vsrc[0] = _mm_add_ps(vsrc[0], _mm_mul_ps(vector[0], vepsilon));
+  vsrc[1] = _mm_add_ps(vsrc[1], _mm_mul_ps(vector[1], vepsilon));
+  vsrc[2] = _mm_add_ps(vsrc[2], _mm_mul_ps(vector[2], vepsilon));
+#else
+  // [line 107-109]
+  vsrc[0] = _mm_load_ps( &packet->origin[RF_PACKETOFFSET+(0*RF_PACKETWIDTH)] );
+  vsrc[1] = _mm_load_ps( &packet->origin[RF_PACKETOFFSET+(1*RF_PACKETWIDTH)] );
+  vsrc[2] = _mm_load_ps( &packet->origin[RF_PACKETOFFSET+(2*RF_PACKETWIDTH)] );
+  // [/line]
+
+  // [line 101-103]
+  vector[0] = _mm_load_ps( &packet->vector[RF_PACKETOFFSET+(0*RF_PACKETWIDTH)] );
+  vector[1] = _mm_load_ps( &packet->vector[RF_PACKETOFFSET+(1*RF_PACKETWIDTH)] );
+  vector[2] = _mm_load_ps( &packet->vector[RF_PACKETOFFSET+(2*RF_PACKETWIDTH)] );
+  // [/line]
+#endif
+
+  RF_RESULT->hitmask = 0;
+  _mm_store_ps( &RF_RESULT->hitdist[0], vunit );
+
+  // [info]
+  // Computing the ray inverse to accelerate ray-box intersection
+  //
+  // Also compute the sign of the ray and invert it to test if rays
+  // are coherent on every axis
+  //
+  // edgevmask = [1 if positive on the axis, 0 otherwise]
+  raymaskinv = raymask ^ 0xF;
+  vecflag = 0;
+  // x axis
+  vectinv[0] = _mm_div_ps( vunit, vector[0] );
+  edgevmask[0] = raymaskinv | ( _mm_movemask_ps( vector[0] ) ^ 0xF );
+  if( (uint32_t)(edgevmask[0]-1) < 0xE )
+    vecflag = 1;
+  // y axis
+  vectinv[1] = _mm_div_ps( vunit, vector[1] );
+  edgevmask[1] = raymaskinv | ( _mm_movemask_ps( vector[1] ) ^ 0xF );
+  if( (uint32_t)(edgevmask[1]-1) < 0xE )
+    vecflag = 1;
+  // z axis
+  vectinv[2] = _mm_div_ps( vunit, vector[2] );
+  edgevmask[2] = raymaskinv | ( _mm_movemask_ps( vector[2] ) ^ 0xF );
+  if( (uint32_t)(edgevmask[2]-1) < 0xE )
+    vecflag = 1;
+  // [/info]
+
+  /* Storage for trace1 */
+  _mm_store_ps( &RF_RESULT->vectinv[RF_PACKETOFFSET+(0*RF_PACKETWIDTH)], vectinv[0] );
+  _mm_store_ps( &RF_RESULT->vectinv[RF_PACKETOFFSET+(1*RF_PACKETWIDTH)], vectinv[1] );
+  _mm_store_ps( &RF_RESULT->vectinv[RF_PACKETOFFSET+(2*RF_PACKETWIDTH)], vectinv[2] );
+
+  // [info]
+  // One of the rays is incoherent on one of the axes, go ahead and trace
+  // as single rays
+  if(vecflag)
+  {
+    if( raymask & 1 ) intersectSingle(rays, ray0, roots[0]);
+    if( raymask & 2 ) intersectSingle(rays, ray1, roots[1]);
+    if( raymask & 4 ) intersectSingle(rays, ray2, roots[2]);
+    if( raymask & 8 ) intersectSingle(rays, ray3, roots[3]);
+    return;
+  }
+  // [/info]
+
+  ////////////////////////////////////////////////////////////////
+  // REMOVED POSSIBLE SSE ORIGIN RESOLUTION CODE
+  ////////////////////////////////////////////////////////////////
+
+  // Load pre-resolved root
+  root = roots[0];//RF_ADDRESS( handle->objectgraph, roots[0] );
+
+  edgeindex[RF_AXIS_X] = ( RF_AXIS_X << RF_EDGE_AXIS_SHIFT ) | ( ( edgevmask[RF_AXIS_X] >> 0 ) & 1 );
+  edgeindex[RF_AXIS_Y] = ( RF_AXIS_Y << RF_EDGE_AXIS_SHIFT ) | ( ( edgevmask[RF_AXIS_Y] >> 0 ) & 1 );
+  edgeindex[RF_AXIS_Z] = ( RF_AXIS_Z << RF_EDGE_AXIS_SHIFT ) | ( ( edgevmask[RF_AXIS_Z] >> 0 ) & 1 );
+
+  for( ; ; )
+  {
+    /* Sector traversal */
+    int32_t vmask0, vmask1, vmask2, submask;
+    __m128 vxdist, vydist, vmindist;
+
+    // [info] [line 140-153]
+    // Ray box intersection to determine endpoint of the line segment to
+    // intersect with triangles. (faster than raw ray intersection, we think)
+    vxdist = _mm_mul_ps( _mm_sub_ps( _mm_set1_ps( RF_SECTOR(root)->edge[ edgeindex[0] ] ), vsrc[0] ), vectinv[0] );
+    vydist = _mm_mul_ps( _mm_sub_ps( _mm_set1_ps( RF_SECTOR(root)->edge[ edgeindex[1] ] ), vsrc[1] ), vectinv[1] );
+    vmindist = _mm_mul_ps( _mm_sub_ps( _mm_set1_ps( RF_SECTOR(root)->edge[ edgeindex[2] ] ), vsrc[2] ), vectinv[2] );
+    vmindist = _mm_min_ps( vmindist, _mm_min_ps( vxdist, vydist ) );
+
+    submask = 0x0;
+    // Sort out if all rays agree if the ray endpoint should be found in x, y, or z...start with z
+    //
+    // Use a "majority vote" mechanism (using bitmasks) to figure out what axis to use for the
+    // majority of rays
+    vmask0 = _mm_movemask_ps( _mm_cmpeq_ps( vmindist, vxdist ) ) & raymask;
+    nredge = edgeindex[2];
+    if( vmask0 == raymask )// all active rays less than x?
+      nredge = edgeindex[0];// x is the min dist
+    else if( ( vmask1 = ( _mm_movemask_ps( _mm_cmpeq_ps( vmindist, vydist ) ) & raymask ) ) == raymask )// check y?
+      nredge = edgeindex[1];// y is the min dist
+    else if( vmask0 | vmask1 )// some are x, some are y?
+    {
+      submask = raymask;
+#if RF_CPUSLOW_SHR
+      if( maskcount[vmask0] >= 2 )
+#else
+      if( 0xfec8 & ( 1 << vmask0 ) )
+#endif
+      {
+        submask -= vmask0;
+        nredge = edgeindex[0];
+      }
+#if RF_CPUSLOW_SHR
+      else if( maskcount[vmask1] >= 2 )
+#else
+      else if( 0xfec8 & ( 1 << vmask1 ) )
+#endif
+      {
+        submask -= vmask1;
+        nredge = edgeindex[1];
+      }
+#if RF_CPUSLOW_SHR
+      else if( maskcount[ vmask2 = ( ( vmask0 | vmask1 ) ^ raymask ) ] >= 2 )
+#else
+      else if( 0xfec8 & ( 1 << ( vmask2 = ( ( vmask0 | vmask1 ) ^ raymask ) ) ) )
+#endif
+        submask -= vmask2;
+    }
+    // [/info]
+
+    if( !( RF_SECTOR_GET_PRIMCOUNT( RF_SECTOR(root) ) ) )
+    {
+      if( submask )// are there any rays left over that don't agree with the majority from above?
+      {
+        void *rayroot;
+        int32_t raynredge;
+
+        vsrc[0] = _mm_add_ps( vsrc[0], _mm_mul_ps( vmindist, vector[0] ) );
+        vsrc[1] = _mm_add_ps( vsrc[1], _mm_mul_ps( vmindist, vector[1] ) );
+        vsrc[2] = _mm_add_ps( vsrc[2], _mm_mul_ps( vmindist, vector[2] ) );
+
+        _mm_store_ps( &RF_RESULT->raysrc[RF_PACKETOFFSET+(0*RF_PACKETWIDTH)], vsrc[0] );
+        _mm_store_ps( &RF_RESULT->raysrc[RF_PACKETOFFSET+(1*RF_PACKETWIDTH)], vsrc[1] );
+        _mm_store_ps( &RF_RESULT->raysrc[RF_PACKETOFFSET+(2*RF_PACKETWIDTH)], vsrc[2] );
+
+        // figure out which ray(s) are in the minority
+        if( submask & 0x1 )
+        {
+          raynredge = edgeindex[2];
+          if( vmask0 & 0x1 )
+            raynredge = edgeindex[0];
+          else if( vmask1 & 0x1 )
+            raynredge = edgeindex[1];
+          rayroot = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ raynredge ] << RF_LINKSHIFT );
+          if( rayroot )
+            intersectSingle(rays, ray0, rayroot);
+        }
+        if( submask & 0x2 )
+        {
+          raynredge = edgeindex[2];
+          if( vmask0 & 0x2 )
+            raynredge = edgeindex[0];
+          else if( vmask1 & 0x2 )
+            raynredge = edgeindex[1];
+          rayroot = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ raynredge ] << RF_LINKSHIFT );
+          if( rayroot )
+            intersectSingle(rays, ray1, rayroot);
+        }
+        if( submask & 0x4 )
+        {
+          raynredge = edgeindex[2];
+          if( vmask0 & 0x4 )
+            raynredge = edgeindex[0];
+          else if( vmask1 & 0x4 )
+            raynredge = edgeindex[1];
+          rayroot = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ raynredge ] << RF_LINKSHIFT );
+          if( rayroot )
+            intersectSingle(rays, ray2, rayroot);
+        }
+        if( submask & 0x8 )
+        {
+          raynredge = edgeindex[2];
+          if( vmask0 & 0x8 )
+            raynredge = edgeindex[0];
+          else if( vmask1 & 0x8 )
+            raynredge = edgeindex[1];
+          rayroot = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ raynredge ] << RF_LINKSHIFT );
+          if( rayroot )
+            intersectSingle(rays, ray3, rayroot);
+        }
+        raymask -= submask;// we have traced the rays via the single ray api, thus "deactivate" them from the overall ray mask
+        if( !( raymask ) )// check to see if we have traced every ray in the mask?
+          goto done;
+
+        // (We think) some rays need to see if they traverse to another sector?
+        if( RF_SECTOR(root)->flags & ( (RF_LINK_SECTOR<<RF_SECTOR_LINKFLAGS_SHIFT) << nredge ) )
+        {
+          slink = (rfssize)RF_SECTOR(root)->link[ nredge ];
+          if( !( slink ) )
+            goto done;
+          root = RF_ADDRESS( root, slink << RF_LINKSHIFT );
+          continue;
+        }
+        // Don't prep for node traversal because we won't be doing SSE node traversal???
+      }
+      else
+      {
+        // All rays agree about the edge (face) we are traversing
+        //
+        // Does the link point to a valid sector?
+        if( RF_SECTOR(root)->flags & ( (RF_LINK_SECTOR<<RF_SECTOR_LINKFLAGS_SHIFT) << nredge ) )
+        {
+          slink = (rfssize)RF_SECTOR(root)->link[ nredge ];
+          if( !( slink ) )// have we hit the edge of the graph?
+            goto done;
+          root = RF_ADDRESS( root, slink << RF_LINKSHIFT );
+          continue;
+        }
+
+        // We are NOT going straight to another sector, prep for node traversal
+        vsrc[0] = _mm_add_ps( vsrc[0], _mm_mul_ps( vmindist, vector[0] ) );
+        vsrc[1] = _mm_add_ps( vsrc[1], _mm_mul_ps( vmindist, vector[1] ) );
+        vsrc[2] = _mm_add_ps( vsrc[2], _mm_mul_ps( vmindist, vector[2] ) );
+      }
+    }
+    else
+    {
+      // Triangle intersection!!!
+      int32_t a;
+      __m128 vtridst[3];
+      RF_TRILIST_TYPE *trilist;
+
+      vtridst[0] = vdst[0] = _mm_add_ps( _mm_mul_ps( vmindist, vector[0] ), vsrc[0] );
+      vtridst[1] = vdst[1] = _mm_add_ps( _mm_mul_ps( vmindist, vector[1] ), vsrc[1] );
+      vtridst[2] = vdst[2] = _mm_add_ps( _mm_mul_ps( vmindist, vector[2] ), vsrc[2] );
+
+      trilist = RF_TRILIST( RF_SECTOR(root) );
+      for( a = RF_SECTOR(root)->primcount ; a ; a-- )
+      {
+        int32_t tflags, hitmask;
+        rfTri *tri;
+        int32_t signmask;
+
+        tri = (rfTri *)RF_ADDRESS( root, (rfssize)(*trilist++) << RF_LINKSHIFT );
+        pl0 = _mm_set1_ps( tri->plane[0] );
+        pl1 = _mm_set1_ps( tri->plane[1] );
+        pl2 = _mm_set1_ps( tri->plane[2] );
+        pl3 = _mm_set1_ps( tri->plane[3] );
+
+        // Intersect the triangle with no front/back face culling
+        dstdist = _mm_add_ps( _mm_add_ps( _mm_mul_ps( pl0, vtridst[0] ), _mm_mul_ps( pl1, vtridst[1] ) ), _mm_add_ps( _mm_mul_ps( pl2, vtridst[2] ), pl3 ) );
+        srcdist = _mm_add_ps( _mm_add_ps( _mm_mul_ps( pl0, vsrc[0] ), _mm_mul_ps( pl1, vsrc[1] ) ), _mm_add_ps( _mm_mul_ps( pl2, vsrc[2] ), pl3 ) );
+        tflags = ( _mm_movemask_ps( _mm_mul_ps( srcdist, dstdist ) ) ^ 0xF ) & raymask;
+        if( tflags == raymask )
+          continue;
+        vsum = _mm_sub_ps( dstdist, srcdist );
+        vray[0] = _mm_sub_ps( _mm_mul_ps( vsrc[0], dstdist ), _mm_mul_ps( vtridst[0], srcdist ) );
+        vray[1] = _mm_sub_ps( _mm_mul_ps( vsrc[1], dstdist ), _mm_mul_ps( vtridst[1], srcdist ) );
+        vray[2] = _mm_sub_ps( _mm_mul_ps( vsrc[2], dstdist ), _mm_mul_ps( vtridst[2], srcdist ) );
+        signmask = _mm_movemask_ps( vsum );
+        utd = _mm_add_ps( _mm_add_ps( _mm_add_ps( _mm_mul_ps( _mm_set1_ps( tri->edpu[0] ), vray[0] ), _mm_mul_ps( _mm_set1_ps( tri->edpu[1] ), vray[1] ) ), _mm_mul_ps( _mm_set1_ps( tri->edpu[2] ), vray[2] ) ), _mm_mul_ps( _mm_set1_ps( tri->edpu[3] ), vsum ) );
+        tflags |= ( _mm_movemask_ps( utd ) ^ signmask ) & raymask;
+        if( tflags == raymask )
+          continue;
+        vtd = _mm_add_ps( _mm_add_ps( _mm_add_ps( _mm_mul_ps( _mm_set1_ps( tri->edpv[0] ), vray[0] ), _mm_mul_ps( _mm_set1_ps( tri->edpv[1] ), vray[1] ) ), _mm_mul_ps( _mm_set1_ps( tri->edpv[2] ), vray[2] ) ), _mm_mul_ps( _mm_set1_ps( tri->edpv[3] ), vsum ) );
+        tflags |= ( _mm_movemask_ps( vtd ) ^ signmask ) & raymask;
+        if( tflags == raymask )
+          continue;
+        tflags |= ( _mm_movemask_ps( _mm_cmple_ps( vsum, _mm_add_ps( utd, vtd ) ) ) ^ signmask ) & raymask;
+        if( tflags == raymask )
+          continue;
+
+        vsum = _mm_div_ps( vunit, vsum );
+        hitmask = tflags ^ raymask;
+
+        donemask |= hitmask;// mark rays that are both "active" and "hit/done"
+        // tflags = rays that did hit the plane of the triangle
+        if( !( tflags ) )
+        {
+          // All of the rays hit the triangle, compute the distances for all of the rays
+          vtridst[0] = _mm_mul_ps( vray[0], vsum );
+          vtridst[1] = _mm_mul_ps( vray[1], vsum );
+          vtridst[2] = _mm_mul_ps( vray[2], vsum );
+        }
+        else
+        {
+          // ...sort out (efficiently) the rays that did hit this triangle
+          __m128 vblendmask;
+          vblendmask = _mm_load_ps( (float *)&ortable[ hitmask << 2 ] );
+#if RFTRACE__SSE4_1__ && !RF_CPUSLOW_BLENDVPS
+          vtridst[0] = _mm_blendv_ps( vtridst[0], _mm_mul_ps( vray[0], vsum ), vblendmask );
+          vtridst[1] = _mm_blendv_ps( vtridst[1], _mm_mul_ps( vray[1], vsum ), vblendmask );
+          vtridst[2] = _mm_blendv_ps( vtridst[2], _mm_mul_ps( vray[2], vsum ), vblendmask );
+#else
+          vtridst[0] = _mm_or_ps( _mm_and_ps( _mm_mul_ps( vray[0], vsum ), vblendmask ), _mm_andnot_ps( vblendmask, vtridst[0] ) );
+          vtridst[1] = _mm_or_ps( _mm_and_ps( _mm_mul_ps( vray[1], vsum ), vblendmask ), _mm_andnot_ps( vblendmask, vtridst[1] ) );
+          vtridst[2] = _mm_or_ps( _mm_and_ps( _mm_mul_ps( vray[2], vsum ), vblendmask ), _mm_andnot_ps( vblendmask, vtridst[2] ) );
+#endif
+        }
+
+        /* TODO: Optimize me */
+        axisindex = nredge >> 1;
+        // [line 236-238?]
+        vhitdist = _mm_mul_ps( _mm_sub_ps( vtridst[axisindex], *(__m128*)&rays.getOrigin(rays.rayBegin, axisindex) ), vectinv[axisindex] );
+        // [info]
+        // Figure out where to store the results of the ray hits
+        if( hitmask == 0xF )
+        {
+          // All the rays hit the same thing
+          RF_RESULT->hittri[RF_PACKETOFFSET+0] = tri;
+          RF_RESULT->hittri[RF_PACKETOFFSET+1] = tri;
+          RF_RESULT->hittri[RF_PACKETOFFSET+2] = tri;
+          RF_RESULT->hittri[RF_PACKETOFFSET+3] = tri;
+          _mm_store_ps( &RF_RESULT->hitdist[RF_PACKETOFFSET], vhitdist );
+        }
+        else
+        {
+          // Store the data one ray at a time
+          __m128 vblendmask;
+          if( hitmask & 1 )
+            RF_RESULT->hittri[RF_PACKETOFFSET+0] = tri;
+          if( hitmask & 2 )
+            RF_RESULT->hittri[RF_PACKETOFFSET+1] = tri;
+          if( hitmask & 4 )
+            RF_RESULT->hittri[RF_PACKETOFFSET+2] = tri;
+          if( hitmask & 8 )
+            RF_RESULT->hittri[RF_PACKETOFFSET+3] = tri;
+
+          vblendmask = _mm_load_ps( (float *)&ortable[ hitmask << 2 ] );
+ #if RFTRACE__SSE4_1__ && !RF_CPUSLOW_BLENDVPS
+          _mm_store_ps( &RF_RESULT->hitdist[RF_PACKETOFFSET], _mm_blendv_ps( _mm_load_ps( &RF_RESULT->hitdist[RF_PACKETOFFSET] ), vhitdist, vblendmask ) );
+ #else
+          _mm_store_ps( &RF_RESULT->hitdist[RF_PACKETOFFSET], _mm_or_ps( _mm_and_ps( vhitdist, vblendmask ), _mm_andnot_ps( vblendmask, _mm_load_ps( &RF_RESULT->hitdist[RF_PACKETOFFSET] ) ) ) );
+ #endif
+        }
+
+        // [/info]
+      }
+
+      // Deactivate rays that agreed with major edge traversal and reset submask to the other rays that need intersected
+      submask &= ~donemask;
+
+      // Do we have rays to still trace?
+      if( submask )
+      {
+        void *rayroot;
+        int32_t raynredge;
+
+        _mm_store_ps( &RF_RESULT->raysrc[RF_PACKETOFFSET+(0*RF_PACKETWIDTH)], vdst[0] );
+        _mm_store_ps( &RF_RESULT->raysrc[RF_PACKETOFFSET+(1*RF_PACKETWIDTH)], vdst[1] );
+        _mm_store_ps( &RF_RESULT->raysrc[RF_PACKETOFFSET+(2*RF_PACKETWIDTH)], vdst[2] );
+
+        if( submask & 0x1 )
+        {
+          raynredge = edgeindex[2];
+          if( vmask0 & 0x1 )
+            raynredge = edgeindex[0];
+          else if( vmask1 & 0x1 )
+            raynredge = edgeindex[1];
+          rayroot = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ raynredge ] << RF_LINKSHIFT );
+          if( rayroot )
+            intersectSingle(rays, ray0, rayroot);
+        }
+        if( submask & 0x2 )
+        {
+          raynredge = edgeindex[2];
+          if( vmask0 & 0x2 )
+            raynredge = edgeindex[0];
+          else if( vmask1 & 0x2 )
+            raynredge = edgeindex[1];
+          rayroot = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ raynredge ] << RF_LINKSHIFT );
+          if( rayroot )
+            intersectSingle(rays, ray1, rayroot);
+        }
+        if( submask & 0x4 )
+        {
+          raynredge = edgeindex[2];
+          if( vmask0 & 0x4 )
+            raynredge = edgeindex[0];
+          else if( vmask1 & 0x4 )
+            raynredge = edgeindex[1];
+          rayroot = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ raynredge ] << RF_LINKSHIFT );
+          if( rayroot )
+            intersectSingle(rays, ray2, rayroot);
+        }
+        if( submask & 0x8 )
+        {
+          raynredge = edgeindex[2];
+          if( vmask0 & 0x8 )
+            raynredge = edgeindex[0];
+          else if( vmask1 & 0x8 )
+            raynredge = edgeindex[1];
+          rayroot = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ raynredge ] << RF_LINKSHIFT );
+          if( rayroot )
+            intersectSingle(rays, ray3, rayroot);
+        }
+      }
+
+      // Update ray mask to what we have traced thus far
+      raymask &= ~( submask | donemask );
+      if( !( raymask ) )
+        goto done;
+      if( RF_SECTOR(root)->flags & ( (RF_LINK_SECTOR<<RF_SECTOR_LINKFLAGS_SHIFT) << nredge ) )
+      {
+        slink = (rfssize)RF_SECTOR(root)->link[ nredge ];
+        if( !( slink ) )
+          goto done;
+        root = RF_ADDRESS( root, slink << RF_LINKSHIFT );
+        continue;
+      }
+
+      // Prep to push into adjacent nodes
+      vsrc[0] = vdst[0];
+      vsrc[1] = vdst[1];
+      vsrc[2] = vdst[2];
+    }
+
+    // ALL OF THIS SECTOR'S TRAVERSAL IS DONE, begin adjacent node traversal (because some rays are still active)
+
+    root = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ nredge ] << RF_LINKSHIFT );
+
+    _mm_store_ps( &RF_RESULT->raysrc[RF_PACKETOFFSET+(0*RF_PACKETWIDTH)], vsrc[0] );
+    _mm_store_ps( &RF_RESULT->raysrc[RF_PACKETOFFSET+(1*RF_PACKETWIDTH)], vsrc[1] );
+    _mm_store_ps( &RF_RESULT->raysrc[RF_PACKETOFFSET+(2*RF_PACKETWIDTH)], vsrc[2] );
+
+    /* Node traversal */
+    for( ; ; )
+    {
+      int32_t linkflags, nbits;
+      __m128 nodesrc;
+
+      linkflags = RF_NODE(root)->flags;
+
+      /* TODO: What about branches? Merges? Something? */
+      nodesrc = _mm_load_ps( &RF_RESULT->raysrc[ RF_PACKETOFFSET + ( RF_NODE_GET_AXIS(linkflags) * RF_PACKETWIDTH ) ] );
+
+      nbits = _mm_movemask_ps( _mm_cmplt_ps( nodesrc, _mm_set1_ps( RF_NODE(root)->plane ) ) ) & raymask;
+      if( !( nbits ) )
+      {
+        root = RF_ADDRESS( root, (rfssize)RF_NODE(root)->link[RF_NODE_MORE] << RF_LINKSHIFT );
+        if( linkflags & ( (RF_LINK_SECTOR<<RF_NODE_LINKFLAGS_SHIFT) << RF_NODE_MORE ) )
+          break;
+      }
+      else if( nbits == raymask )
+      {
+        root = RF_ADDRESS( root, (rfssize)RF_NODE(root)->link[RF_NODE_LESS] << RF_LINKSHIFT );
+        if( linkflags & ( (RF_LINK_SECTOR<<RF_NODE_LINKFLAGS_SHIFT) << RF_NODE_LESS ) )
+          break;
+      }
+      else
+      {
+        int32_t nbitsl, snmask, rayflag, raypath, nbitscount;
+        void *rayroot;
+        nbitsl = nbits ^ raymask;
+        snmask = nbits & raymask;
+#if RF_CPUSLOW_SHR
+        nbitscount = maskcount[ nbits ];
+        if( nbitscount > maskcount[ nbitsl ] )
+#else
+        nbitscount = ( ( 0xfee9e994 >> (nbits+nbits) ) & 0x3 );
+        if( nbitscount > ( ( 0xfee9e994 >> (nbitsl+nbitsl) ) & 0x3 ) )
+#endif
+        {
+          snmask ^= raymask;
+          if( nbitscount < 2 )
+            snmask = raymask;
+        }
+
+        if( snmask & 0x1 )
+        {
+          rayflag = ( nbitsl >> 0 ) & 0x1;
+          rayroot = RF_ADDRESS( root, (rfssize)RF_NODE(root)->link[ rayflag ] << RF_LINKSHIFT );
+          raypath = ( linkflags >> ( RF_NODE_LINKFLAGS_SHIFT + rayflag ) ) & 0x1;
+          intersectSingle(rays, ray0, rayroot);
+        }
+        if( snmask & 0x2 )
+        {
+          rayflag = ( nbitsl >> 1 ) & 0x1;
+          rayroot = RF_ADDRESS( root, (rfssize)RF_NODE(root)->link[ rayflag ] << RF_LINKSHIFT );
+          raypath = ( linkflags >> ( RF_NODE_LINKFLAGS_SHIFT + rayflag ) ) & 0x1;
+          intersectSingle(rays, ray1, rayroot);
+        }
+        if( snmask & 0x4 )
+        {
+          rayflag = ( nbitsl >> 2 ) & 0x1;
+          rayroot = RF_ADDRESS( root, (rfssize)RF_NODE(root)->link[ rayflag ] << RF_LINKSHIFT );
+          raypath = ( linkflags >> ( RF_NODE_LINKFLAGS_SHIFT + rayflag ) ) & 0x1;
+          intersectSingle(rays, ray2, rayroot);
+        }
+        if( snmask & 0x8 )
+        {
+          rayflag = ( nbitsl >> 3 ) & 0x1;
+          rayroot = RF_ADDRESS( root, (rfssize)RF_NODE(root)->link[ rayflag ] << RF_LINKSHIFT );
+          raypath = ( linkflags >> ( RF_NODE_LINKFLAGS_SHIFT + rayflag ) ) & 0x1;
+          intersectSingle(rays, ray3, rayroot);
+        }
+        raymask -= snmask;
+        if( !( raymask ) )
+          goto done;
+      }
+    }
+  }
+
+  done:
+
+    rfTri *tri0, *tri1, *tri2, *tri3;
+    donemask |= ( RF_RESULT->hitmask >> RF_PACKETOFFSET ) & 0xf;
+    tri0 = &((rfTri*)RF_RESULT->hittri)[RF_PACKETOFFSET+0];
+    tri1 = &((rfTri*)RF_RESULT->hittri)[RF_PACKETOFFSET+1];
+    tri2 = &((rfTri*)RF_RESULT->hittri)[RF_PACKETOFFSET+2];
+    tri3 = &((rfTri*)RF_RESULT->hittri)[RF_PACKETOFFSET+3];
+    if( donemask & 0x1 )
+      pl0 = _mm_load_ps( tri0->plane );
+    else
+      pl0 = _mm_set1_ps( 0.0 );
+    if( donemask & 0x2 )
+      pl1 = _mm_load_ps( tri1->plane );
+    else
+      pl1 = _mm_set1_ps( 0.0 );
+    if( donemask & 0x4 )
+      pl2 = _mm_load_ps( tri2->plane );
+    else
+      pl2 = _mm_set1_ps( 0.0 );
+    if( donemask & 0x8 )
+      pl3 = _mm_load_ps( tri3->plane );
+    else
+      pl3 = _mm_set1_ps( 0.0 );
+
+#define TRACEHITPLANEPACKED 0
+
+ #if !TRACEHITPLANEPACKED
+    __m128 t0, t1, t2, t3;
+    t0 = _mm_unpacklo_ps( pl0, pl1 );
+    t1 = _mm_unpacklo_ps( pl2, pl3 );
+    t2 = _mm_unpackhi_ps( pl0, pl1 );
+    t3 = _mm_unpackhi_ps( pl2, pl3 );
+    _mm_store_ps( &RF_RESULT->hitplane[RF_PACKETOFFSET+(0*RF_PACKETWIDTH)], _mm_movelh_ps( t0, t1 ) );
+    _mm_store_ps( &RF_RESULT->hitplane[RF_PACKETOFFSET+(1*RF_PACKETWIDTH)], _mm_movehl_ps( t1, t0 ) );
+    _mm_store_ps( &RF_RESULT->hitplane[RF_PACKETOFFSET+(2*RF_PACKETWIDTH)], _mm_movelh_ps( t2, t3 ) );
+    _mm_store_ps( &RF_RESULT->hitplane[RF_PACKETOFFSET+(3*RF_PACKETWIDTH)], _mm_movehl_ps( t3, t2 ) );
+ #else
+    _mm_store_ps( &RF_RESULT->hitplane[RF_PACKETOFFSET+(0*RF_PACKETWIDTH)], pl0 );
+    _mm_store_ps( &RF_RESULT->hitplane[RF_PACKETOFFSET+(1*RF_PACKETWIDTH)], pl1 );
+    _mm_store_ps( &RF_RESULT->hitplane[RF_PACKETOFFSET+(2*RF_PACKETWIDTH)], pl2 );
+    _mm_store_ps( &RF_RESULT->hitplane[RF_PACKETOFFSET+(3*RF_PACKETWIDTH)], pl3 );
+ #endif
+
+  RF_RESULT->hitmask |= donemask << RF_PACKETOFFSET;
+
+  RF_RESULT->hittri[0] = RF_ADDRESS( RF_RESULT->hittri[0], sizeof(rfTri) );
+  RF_RESULT->hittri[1] = RF_ADDRESS( RF_RESULT->hittri[1], sizeof(rfTri) );
+  RF_RESULT->hittri[2] = RF_ADDRESS( RF_RESULT->hittri[2], sizeof(rfTri) );
+  RF_RESULT->hittri[3] = RF_ADDRESS( RF_RESULT->hittri[3], sizeof(rfTri) );
+
+  //[info]
+  // Set the ray hit information for the ray packet
+  for (int i = 0; i < 4; ++i)
+  {
+    if(RF_RESULT->hitmask & (0x1 << i))
+    {
+      rfTriangleData* data = (rfTriangleData*)(RF_RESULT->hittri[i]);
+
+      Material *material   = currMesh->materials[data->matID];
+      Primitive *primitive = (Primitive*)currMesh->get(data->triID);
+
+      float hitdist = RF_RESULT->hitdist[i];
+      rays.hit(rays.rayBegin+i, hitdist - T_EPSILON, material, primitive, this);
+
+      #if !TRACEHITPLANEPACKED
+      Vector normal(RF_RESULT->hitplane[0+i],
+                    RF_RESULT->hitplane[4+i],
+                    RF_RESULT->hitplane[8+i]);
+      #else
+      Vector normal(RF_RESULT->hitplane[4*i+0],
+                    RF_RESULT->hitplane[4*i+1],
+                    RF_RESULT->hitplane[4*i+2]);
+      #endif
+      normal.normalize();
+      rays.setNormal(rays.rayBegin+i, normal);
+    }
+  }
+  //[/info]
 }
 
 void RFGraph::cleanup()
