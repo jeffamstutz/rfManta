@@ -633,10 +633,12 @@ void RFGraph::intersectSingle(RayPacket &rays, int which, void *root) const
 
     Material *material   = currMesh->materials[data->matID];
     Primitive *primitive = (Primitive*)currMesh->get(data->triID);
-    rays.hit(which, hitdist - T_EPSILON, material, primitive, this);
-    Vector normal(trihit->plane[0], trihit->plane[1], trihit->plane[2]);
-    normal.normalize();
-    rays.setNormal(which, normal);
+    if(rays.hit(which, hitdist - T_EPSILON, material, primitive, this))
+    {
+      Vector normal(trihit->plane[0], trihit->plane[1], trihit->plane[2]);
+      normal.normalize();
+      rays.setNormal(which, normal);
+    }
   }
 }
 
@@ -1286,19 +1288,24 @@ void RFGraph::intersectSSE(RayPacket& rays, void *roots[4]) const
       Primitive *primitive = (Primitive*)currMesh->get(data->triID);
 
       float hitdist = RF_RESULT->hitdist[i];
-      rays.hit(rays.rayBegin+i, hitdist - T_EPSILON, material, primitive, this);
-
-      #if !TRACEHITPLANEPACKED
-      Vector normal(RF_RESULT->hitplane[0+i],
-                    RF_RESULT->hitplane[4+i],
-                    RF_RESULT->hitplane[8+i]);
-      #else
-      Vector normal(RF_RESULT->hitplane[4*i+0],
-                    RF_RESULT->hitplane[4*i+1],
-                    RF_RESULT->hitplane[4*i+2]);
-      #endif
-      normal.normalize();
-      rays.setNormal(rays.rayBegin+i, normal);
+      if (rays.hit(rays.rayBegin+i,
+                   hitdist - T_EPSILON,
+                   material,
+                   primitive,
+                   this))
+      {
+         #if !TRACEHITPLANEPACKED
+         Vector normal(RF_RESULT->hitplane[0+i],
+                       RF_RESULT->hitplane[4+i],
+                       RF_RESULT->hitplane[8+i]);
+         #else
+         Vector normal(RF_RESULT->hitplane[4*i+0],
+                       RF_RESULT->hitplane[4*i+1],
+                       RF_RESULT->hitplane[4*i+2]);
+         #endif
+         normal.normalize();
+         rays.setNormal(rays.rayBegin+i, normal);
+      }
     }
   }
   //[/info]
