@@ -454,8 +454,6 @@ void RFGraph::intersectSingle(RayPacket &rays, int which, void *root) const
   origin[1] = ray.origin()[1];
   origin[2] = ray.origin()[2];
 
-  root = resolve(graph, origin);
-
   // Offset src by T_EPSILON to avoid self-shading
   src[0] = origin[0] + vector[0] * T_EPSILON;
   src[1] = origin[1] + vector[1] * T_EPSILON;
@@ -877,7 +875,7 @@ void RFGraph::intersectSSE(RayPacket& rays, void *roots[4]) const
             raynredge = edgeindex[1];
           rayroot = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ raynredge ] << RF_LINKSHIFT );
           if( rayroot )
-            intersectSingle(rays, ray0, rayroot);
+            intersectSingle(rays, ray0, roots[0]);
         }
         if( submask & 0x2 )
         {
@@ -888,7 +886,7 @@ void RFGraph::intersectSSE(RayPacket& rays, void *roots[4]) const
             raynredge = edgeindex[1];
           rayroot = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ raynredge ] << RF_LINKSHIFT );
           if( rayroot )
-            intersectSingle(rays, ray1, rayroot);
+            intersectSingle(rays, ray1, roots[1]);
         }
         if( submask & 0x4 )
         {
@@ -899,7 +897,7 @@ void RFGraph::intersectSSE(RayPacket& rays, void *roots[4]) const
             raynredge = edgeindex[1];
           rayroot = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ raynredge ] << RF_LINKSHIFT );
           if( rayroot )
-            intersectSingle(rays, ray2, rayroot);
+            intersectSingle(rays, ray2, roots[2]);
         }
         if( submask & 0x8 )
         {
@@ -910,7 +908,7 @@ void RFGraph::intersectSSE(RayPacket& rays, void *roots[4]) const
             raynredge = edgeindex[1];
           rayroot = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ raynredge ] << RF_LINKSHIFT );
           if( rayroot )
-            intersectSingle(rays, ray3, rayroot);
+            intersectSingle(rays, ray3, roots[3]);
         }
         raymask -= submask;// we have traced the rays via the single ray api, thus "deactivate" them from the overall ray mask
         if( !( raymask ) )// check to see if we have traced every ray in the mask?
@@ -1083,7 +1081,7 @@ void RFGraph::intersectSSE(RayPacket& rays, void *roots[4]) const
             raynredge = edgeindex[1];
           rayroot = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ raynredge ] << RF_LINKSHIFT );
           if( rayroot )
-            intersectSingle(rays, ray0, rayroot);
+            intersectSingle(rays, ray0, roots[0]);
         }
         if( submask & 0x2 )
         {
@@ -1094,7 +1092,7 @@ void RFGraph::intersectSSE(RayPacket& rays, void *roots[4]) const
             raynredge = edgeindex[1];
           rayroot = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ raynredge ] << RF_LINKSHIFT );
           if( rayroot )
-            intersectSingle(rays, ray1, rayroot);
+            intersectSingle(rays, ray1, roots[1]);
         }
         if( submask & 0x4 )
         {
@@ -1105,7 +1103,7 @@ void RFGraph::intersectSSE(RayPacket& rays, void *roots[4]) const
             raynredge = edgeindex[1];
           rayroot = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ raynredge ] << RF_LINKSHIFT );
           if( rayroot )
-            intersectSingle(rays, ray2, rayroot);
+            intersectSingle(rays, ray2, roots[2]);
         }
         if( submask & 0x8 )
         {
@@ -1116,7 +1114,7 @@ void RFGraph::intersectSSE(RayPacket& rays, void *roots[4]) const
             raynredge = edgeindex[1];
           rayroot = RF_ADDRESS( root, (rfssize)RF_SECTOR(root)->link[ raynredge ] << RF_LINKSHIFT );
           if( rayroot )
-            intersectSingle(rays, ray3, rayroot);
+            intersectSingle(rays, ray3, roots[3]);
         }
       }
 
@@ -1195,28 +1193,28 @@ void RFGraph::intersectSSE(RayPacket& rays, void *roots[4]) const
           rayflag = ( nbitsl >> 0 ) & 0x1;
           rayroot = RF_ADDRESS( root, (rfssize)RF_NODE(root)->link[ rayflag ] << RF_LINKSHIFT );
           raypath = ( linkflags >> ( RF_NODE_LINKFLAGS_SHIFT + rayflag ) ) & 0x1;
-          intersectSingle(rays, ray0, rayroot);
+          intersectSingle(rays, ray0, roots[0]);
         }
         if( snmask & 0x2 )
         {
           rayflag = ( nbitsl >> 1 ) & 0x1;
           rayroot = RF_ADDRESS( root, (rfssize)RF_NODE(root)->link[ rayflag ] << RF_LINKSHIFT );
           raypath = ( linkflags >> ( RF_NODE_LINKFLAGS_SHIFT + rayflag ) ) & 0x1;
-          intersectSingle(rays, ray1, rayroot);
+          intersectSingle(rays, ray1, roots[1]);
         }
         if( snmask & 0x4 )
         {
           rayflag = ( nbitsl >> 2 ) & 0x1;
           rayroot = RF_ADDRESS( root, (rfssize)RF_NODE(root)->link[ rayflag ] << RF_LINKSHIFT );
           raypath = ( linkflags >> ( RF_NODE_LINKFLAGS_SHIFT + rayflag ) ) & 0x1;
-          intersectSingle(rays, ray2, rayroot);
+          intersectSingle(rays, ray2, roots[2]);
         }
         if( snmask & 0x8 )
         {
           rayflag = ( nbitsl >> 3 ) & 0x1;
           rayroot = RF_ADDRESS( root, (rfssize)RF_NODE(root)->link[ rayflag ] << RF_LINKSHIFT );
           raypath = ( linkflags >> ( RF_NODE_LINKFLAGS_SHIFT + rayflag ) ) & 0x1;
-          intersectSingle(rays, ray3, rayroot);
+          intersectSingle(rays, ray3, roots[3]);
         }
         raymask -= snmask;
         if( !( raymask ) )
