@@ -33,8 +33,20 @@
 #include <string>
 #include <vector>
 
-#include <OpenEXR/ImfRgba.h>
-#include <OpenEXR/ImfHeader.h>
+#ifdef USE_OPENEXR
+#  include <OpenEXR/ImfRgba.h>
+#  include <OpenEXR/ImfHeader.h>
+#else
+
+namespace Imf
+{
+
+  struct Header;
+  struct Rgba;
+
+} // namespace Imf
+
+#endif // USE_OPENEXR
 
 namespace Manta 
 {
