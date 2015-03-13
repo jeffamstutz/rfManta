@@ -50,6 +50,7 @@ INCLUDE (${CMAKE_SOURCE_DIR}/CMake/FindOpenEXR.cmake)
 
 IF (OpenEXR_FOUND)
   # Add the EXR files
+  ADD_DEFINITIONS(-DUSE_OPENEXR)
   SET (EXR_SRC EXRFile.h EXRFile.cc)
   INCLUDE_DIRECTORIES(${OpenEXR_Include_Dir})
 ELSE(OpenEXR_FOUND)
