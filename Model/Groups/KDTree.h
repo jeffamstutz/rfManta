@@ -15,6 +15,11 @@
 
 // #define COLLECT_STATS
 
+// define RTSAH if you want to use RTSAH traversal order
+// #define RTSAH //note: this currently only works with single ray traversal.
+              //Packet traversal will see no improvement if this is enabled.
+
+
 namespace Manta
 {
 
@@ -67,8 +72,12 @@ namespace Manta
       };
       unsigned int isLeaf : 1;
       unsigned int planeDim : 2;
+#ifdef RTSAH
       unsigned int isLeftCheaper : 1;
       unsigned int childIdx : 28;
+#else
+      unsigned int childIdx : 29;
+#endif // RTSAH
     };
     vector <Node> nodes;
     vector <int> itemList;

@@ -5,7 +5,7 @@ FIND_PACKAGE(Rayforce)
 #Set include directories for Groups/Rayforce.* and Embree.*
 INCLUDE_DIRECTORIES(
     ${RAYFORCE_INCLUDE_DIR}
-    /usr/local/Embree/include
+#    /usr/local/Embree/include
 )
 
 #############################################
@@ -63,5 +63,6 @@ TARGET_LINK_LIBRARIES(Manta_Model
   Manta_Core
   ${Manta_Model_extra_libs}
   ${RAYFORCE_LIBRARIES}
-  /usr/local/Embree/lib/libembree.so
+#  /usr/local/Embree/lib/libembree.so
+  embree
   )

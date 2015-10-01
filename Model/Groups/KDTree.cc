@@ -16,7 +16,7 @@
 using namespace Manta;
 
 // define RTSAH if you want to use RTSAH traversal order
-#define RTSAH //note: this currently only works with single ray traversal.
+// #define RTSAH //note: this currently only works with single ray traversal.
               //Packet traversal will see no improvement if this is enabled.
 
 static const float ISEC_COST = 2;
@@ -365,7 +365,7 @@ void KDTree::intersect(const RenderContext& context, RayPacket& rays) const
   rays.computeInverseDirections();
   const bool anyHit = rays.getFlag(RayPacket::AnyHit);
 
-#if 0  // Set to 1 to trace rays individually instead of using packet traversal.
+#if 1  // Set to 1 to trace rays individually instead of using packet traversal.
 
   TrvStack trvStack[MAX_TREE_HEIGHT];
 
@@ -994,6 +994,7 @@ void KDTree::traverse(const RenderContext &context, RayPacket &ray,
   int transparentHitsSize=0;
 
   while (1) {
+    // std::cout << "nodeID = " << nodeID << std::endl << std::flush;
     const Node &node = nodes[nodeID];
     if (node.isLeaf) {
 
@@ -1046,6 +1047,7 @@ void KDTree::traverse(const RenderContext &context, RayPacket &ray,
         return;
 
       nodeID = stackPtr->nodeID;
+      // std::cout << "nodeID = stackPtr->nodeID : " << nodeID << std::endl << std::flush;
 
       if (anyHit)
         t_n = stackPtr->t_n;
@@ -1067,9 +1069,11 @@ void KDTree::traverse(const RenderContext &context, RayPacket &ray,
 
       if (t_p < t_n) {
         nodeID = backChild;
+        // std::cout << "0 nodeID = backChild : " << nodeID << std::endl << std::flush;
       }
       else if (t_p > t_f) {
         nodeID = frontChild;
+        // std::cout << "nodeID = frontChild : " << nodeID << std::endl << std::flush;
       }
       else {
 #ifdef RTSAH
@@ -1085,6 +1089,7 @@ void KDTree::traverse(const RenderContext &context, RayPacket &ray,
           ++stackPtr;
 
           nodeID = frontChild;
+          // std::cout << "nodeID = frontChild : " << nodeID << std::endl << std::flush;
           t_f = t_p;
 #ifdef RTSAH
         }
@@ -1095,6 +1100,7 @@ void KDTree::traverse(const RenderContext &context, RayPacket &ray,
           stackPtr->t_n = t_n;
           ++stackPtr;
           nodeID = backChild;
+          // std::cout << "1 nodeID = backChild : " << nodeID << std::endl << std::flush;
           t_n = t_p;
         }
 #endif
@@ -1119,6 +1125,7 @@ bool KDTree::intersectBounds(const RenderContext& context, RayPacket& rays) cons
 
 bool KDTree::buildFromFile(const string &file)
 {
+  std::cout << "KDTree::buildFromFile(\"" << file << "\")" << std::endl;
   double startTime = Time::currentSeconds();
 
   bounds.reset();
@@ -1201,11 +1208,20 @@ bool KDTree::buildFromFile(const string &file)
   in.read((char*) &nodes[0], sizeof(Node)*nodes.size());
 #endif
 
+  std::cout << "  itemList_size = " << itemList_size << ' '
+            << itemList.size() << std::endl;
+  std::cout << "  node_size     = " << node_size     << ' '
+            << nodes.size() << std::endl;
+  
   in.close();
 
   double buildTime = Time::currentSeconds() - startTime;
   printf("KDTree tree loaded in %f seconds\n", buildTime);
   printStats();
+
+  std::cout << "KDTree::buildFromFile(\"" << file << "\")" << std::endl;
+  std::cout << "  done" << std::endl;
+  std::cout << std::endl;
 
   return true;
 }
@@ -1258,6 +1274,7 @@ bool KDTree::saveToFile(const string &file)
 
 void KDTree::printStats()
 {
+  std::cout << "KDTree::printStats - begin" << std::endl;
   TreeStats treeStats = {0};
   collectTreeStats(0, 0, treeStats);
 
@@ -1274,6 +1291,8 @@ void KDTree::printStats()
   for (int i=0; i<1024; ++i)
     if (treeStats.childrenLeafHist[i] > 0)
       printf(" - %d leaves with %d children\n", treeStats.childrenLeafHist[i], i);
+
+  std::cout << "KDTree::printStats - end" << std::endl;
 }
 
 void KDTree::collectTreeStats(unsigned int nodeID, int depth, TreeStats &stats)
